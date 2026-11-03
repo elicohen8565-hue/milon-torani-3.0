@@ -1,0 +1,40 @@
+name: build
+
+# Every push builds the program and runs every check (scripts/build_all.sh).
+# On the main branch, a new version number in src/Core.cs is also published as a release (scripts/release.sh).
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Mono, Python imaging and the font of the icon
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y mono-devel mono-mcs libmono-cecil-private-cil python3-pil fonts-dejavu-core
+
+      - name: Build and check
+        run: bash scripts/build_all.sh
+
+      - name: Keep the program with this run
+        uses: actions/upload-artifact@v4
+        with:
+          name: Milon-Torani-3.0
+          path: |
+            dist/Milon-Torani-3.0.exe
+            dist/Milon-Torani-3.0.exe.sha256
+
+      - name: Publish a release for a new version
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/release.sh

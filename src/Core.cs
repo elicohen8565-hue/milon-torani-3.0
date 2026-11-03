@@ -1,0 +1,1683 @@
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Globalization;
+using System.IO;
+using System.IO.Compression;
+using System.Reflection;
+using System.Runtime.InteropServices;
+using System.Text;
+using System.Threading;
+using Microsoft.Win32;
+
+namespace OtzariaDict
+{
+    // ---------------------------------------------------------------- files, words, log
+    public static class Core
+    {
+        public const string AppVersion = "3.0.0.8";
+
+        // ONE dictionary file (from 3.0.0.2). With five files Word 365 used only the first ones,
+        // while one file of 102,573 words (version 2.0) works. Everything goes into this file, most important words first.
+        public const string MainFile = "Milon_Torani.dic";
+
+        // files of 3.0.0.0 / 3.0.0.1 - never written any more, only removed
+        public const string BasicFile = "Otzaria_Torah_Basic.dic";
+        public const string MoreFile = "Otzaria_Torah_Extended.dic";
+        public const string More2File = "Otzaria_Torah_Extended2.dic";
+        public const string AcroFile = "Otzaria_Torah_Acronyms.dic";
+        public const string Acro4File = "Otzaria_Torah_Acronyms4.dic";
+        public const string ComposeFile = "Otzaria_Torah_Composition.dic";
+        public static readonly string[] LegacyFiles = new string[] { BasicFile, MoreFile, More2File, AcroFile, Acro4File, ComposeFile };
+        public static readonly string[] OurFiles = new string[] { MainFile, BasicFile, MoreFile, More2File, AcroFile, Acro4File, ComposeFile };
+
+        public const string BasicRes = "Otzaria.basic.txt.gz";
+        public const string MoreRes = "Otzaria.more.txt.gz";
+        public const string BaseRes = "Otzaria.hebrew_base.txt.gz";
+        public const string CountsRes = "Otzaria.counts.txt";   // exact word count of each edition, written by make_assets.py
+
+        // Aramaic-style connecting letters put in front of ordinary Hebrew words
+        public static readonly string[] Connectors = new string[] { "ד", "וד", "כד", "וכד", "מד", "ומד" };
+
+        public static string LogPath = Path.Combine(Path.GetTempPath(), "milon-torani-log.txt");
+        public static string UProofOverride = null;   // used only by the self-test
+
+        public static string UProofDir()
+        {
+            if (UProofOverride != null) return UProofOverride;
+            string appdata = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+            return Path.Combine(Path.Combine(appdata, "Microsoft"), "UProof");
+        }
+
+        public static bool IsOurs(string fileName)
+        {
+            if (fileName == null) return false;
+            foreach (string f in OurFiles)
+                if (string.Equals(fileName, f, StringComparison.OrdinalIgnoreCase)) return true;
+            return false;
+        }
+
+        public static void Log(string s)
+        {
+            try { File.AppendAllText(LogPath, DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture) + "  " + s + "\r\n", Encoding.UTF8); }
+            catch (Exception) { }
+        }
+
+        // the log never grows without limit: a big old log is simply started again
+        public static void TrimLog()
+        {
+            try { FileInfo fi = new FileInfo(LogPath); if (fi.Exists && fi.Length > 1000000) fi.Delete(); }
+            catch (Exception) { }
+        }
+
+        public static string Msg(Exception ex)
+        {
+            while (ex is TargetInvocationException && ex.InnerException != null) ex = ex.InnerException;
+            string s = ex.GetType().Name + ": " + ex.Message;
+            COMException ce = ex as COMException;
+            if (ce != null) s += " (0x" + unchecked((uint)ce.ErrorCode).ToString("X8") + ")";   // the Windows error number helps to find the cause
+            return s;
+        }
+
+        // Word's Dictionary.Path is often empty or not a real folder (Microsoft 365 keeps some dictionaries in the cloud),
+        // so look for the file where Word usually keeps it: the folder Word reported first, then the UProof folder.
+        public static string ResolveDicPath(string folderFromWord, string name)
+        {
+            if (string.IsNullOrEmpty(name)) return null;
+            string p = null;
+            if (!string.IsNullOrEmpty(folderFromWord)) p = IfExists(folderFromWord, name);
+            if (p == null) p = IfExists(UProofDir(), name);
+            if (p == null)
+            {
+                try { if (Path.IsPathRooted(name) && File.Exists(name)) p = name; }
+                catch (Exception) { }
+            }
+            return p;
+        }
+
+        static string IfExists(string folder, string name)
+        {
+            try
+            {
+                string p = Path.Combine(folder, name);
+                return File.Exists(p) ? p : null;
+            }
+            catch (Exception) { return null; }   // a name or folder with characters that are not allowed in a path
+        }
+
+        // ------------------------------------------------ exact number of words of each edition
+        // Written into the program when it is built (make_assets.py), so the window does not have to open and count the
+        // word lists every time it starts. The self-test builds every edition for real and compares.
+        static Dictionary<string, int> editionCounts;
+
+        public static int EditionCount(bool extended, bool compose)
+        {
+            string key = (extended ? "extended" : "basic") + (compose ? "_comp" : "");
+            try
+            {
+                if (editionCounts == null)
+                {
+                    Dictionary<string, int> d = new Dictionary<string, int>();
+                    using (Stream s = Assembly.GetExecutingAssembly().GetManifestResourceStream(CountsRes))
+                    {
+                        if (s != null)
+                            using (StreamReader r = new StreamReader(s, new UTF8Encoding(false)))
+                            {
+                                string line;
+                                while ((line = r.ReadLine()) != null)
+                                {
+                                    string[] p = line.Trim().Split(new char[] { ' ' });   // an explicit array: Split(' ') can bind to a method that .NET Framework does not have
+                                    int v;
+                                    if (p.Length == 2 && int.TryParse(p[1], out v)) d[p[0]] = v;
+                                }
+                            }
+                    }
+                    editionCounts = d;
+                }
+                int n;
+                if (editionCounts.TryGetValue(key, out n) && n > 0) return n;
+            }
+            catch (Exception ex) { Log("edition counts failed: " + Msg(ex)); }
+            int real = BuildWords(extended, compose).Count;   // not expected (the counts file is missing): count for real
+            if (editionCounts != null) editionCounts[key] = real;
+            return real;
+        }
+
+        public static List<string> LoadWords(string resource)
+        {
+            List<string> list = new List<string>();
+            using (Stream s = Assembly.GetExecutingAssembly().GetManifestResourceStream(resource))
+            {
+                if (s == null) throw new InvalidOperationException("Missing embedded word list: " + resource);
+                using (GZipStream gz = new GZipStream(s, CompressionMode.Decompress))
+                using (StreamReader r = new StreamReader(gz, new UTF8Encoding(false)))
+                {
+                    string line;
+                    while ((line = r.ReadLine()) != null)
+                    {
+                        line = line.Trim();
+                        if (line.Length > 0) list.Add(line);
+                    }
+                }
+            }
+            return list;
+        }
+
+        // Counts lines without building the list (fast start-up)
+        public static int CountWords(string resource)
+        {
+            int n = 0;
+            using (Stream s = Assembly.GetExecutingAssembly().GetManifestResourceStream(resource))
+            {
+                if (s == null) return 0;
+                using (GZipStream gz = new GZipStream(s, CompressionMode.Decompress))
+                using (StreamReader r = new StreamReader(gz, new UTF8Encoding(false)))
+                {
+                    string line;
+                    while ((line = r.ReadLine()) != null) if (line.Trim().Length > 0) n++;
+                }
+            }
+            return n;
+        }
+
+        // ------------------------------------------------ acronyms: every Hebrew letter combination with the gershayim (") before the last letter
+        const string AcroFirst = "אבגדהוזחטיכלמנסעפצקרשת";    // 22 letters in their regular form
+        const string AcroLast = "אבגדהוזחטיךלםןסעףץקרשת";      // 22 letters, final forms (ך ם ן ף ץ) where Hebrew writes them
+
+        public static long AcronymCount(int letters)
+        {
+            long t = 1;
+            for (int i = 0; i < letters; i++) t *= 22;
+            return t;
+        }
+
+        // all acronyms with minLetters..maxLetters letters, e.g. 3 letters -> רש"י-style pattern: two letters, ", last letter
+        public static List<string> MakeAcronyms(int minLetters, int maxLetters)
+        {
+            List<string> list = new List<string>((int)Math.Min(300000, AcronymCount(maxLetters) + 20000));
+            for (int n = minLetters; n <= maxLetters; n++)
+            {
+                char[] buf = new char[n + 1];
+                int[] idx = new int[n];
+                long total = AcronymCount(n);
+                for (long k = 0; k < total; k++)
+                {
+                    long r = k;
+                    for (int p = n - 1; p >= 0; p--) { idx[p] = (int)(r % 22); r /= 22; }
+                    for (int p = 0; p < n - 1; p++) buf[p] = AcroFirst[idx[p]];
+                    buf[n - 1] = '"';
+                    buf[n] = AcroLast[idx[n - 1]];
+                    list.Add(new string(buf));
+                }
+            }
+            return list;
+        }
+
+        // ------------------------------------------------ "chibur torani": connectors (ד, וד, כד ...) + common Hebrew words
+        public static List<string> MakeComposition()
+        {
+            List<string> bases = LoadWords(BaseRes);
+            List<string> list = new List<string>(bases.Count * Connectors.Length);
+            foreach (string b in bases)
+                foreach (string c in Connectors)
+                    list.Add(c + b);
+            return list;
+        }
+
+        // the words of the single dictionary file: basic, acronyms, extended, composition - in this order, without duplicates
+        public static List<string> BuildWords(bool extended, bool compose)
+        {
+            List<string> all = new List<string>(extended ? 180000 : 70000);
+            HashSet<string> seen = new HashSet<string>(StringComparer.Ordinal);
+            AddUnique(all, seen, LoadWords(BasicRes));
+            AddUnique(all, seen, MakeAcronyms(2, 3));
+            if (extended) AddUnique(all, seen, LoadWords(MoreRes));
+            if (compose) AddUnique(all, seen, MakeComposition());
+            return all;
+        }
+
+        static void AddUnique(List<string> all, HashSet<string> seen, List<string> words)
+        {
+            foreach (string w in words) if (seen.Add(w)) all.Add(w);
+        }
+
+        // number of words in any custom dictionary file (Unicode, UTF-8 or the old ANSI kind)
+        public static int CountDicWords(string path)
+        {
+            byte[] raw = File.ReadAllBytes(path);
+            string txt;
+            if (raw.Length >= 2 && raw[0] == 0xFF && raw[1] == 0xFE) txt = Encoding.Unicode.GetString(raw, 2, raw.Length - 2);
+            else if (raw.Length >= 3 && raw[0] == 0xEF && raw[1] == 0xBB && raw[2] == 0xBF) txt = Encoding.UTF8.GetString(raw, 3, raw.Length - 3);
+            else txt = Encoding.Default.GetString(raw);
+            int n = 0;
+            foreach (string line in txt.Split(new char[] { '\n' })) if (line.Trim().Length > 0) n++;
+            return n;
+        }
+
+        // Only for the self-test: true = writing / deleting / copying over this file fails, as if another program held it.
+        public static Func<string, bool> FailWriteHook, FailDeleteHook, FailCopyHook;
+
+        // copies a file over another one
+        public static void CopyFile(string from, string to)
+        {
+            if (FailCopyHook != null && FailCopyHook(to)) throw new IOException("simulated: the file is locked");
+            File.Copy(from, to, true);
+        }
+
+        // deletes a file, also when it is marked read-only
+        public static void DeleteFile(string path)
+        {
+            if (FailDeleteHook != null && FailDeleteHook(path)) throw new IOException("simulated: the file is in use");
+            try
+            {
+                FileAttributes a = File.GetAttributes(path);
+                if ((a & FileAttributes.ReadOnly) != 0) File.SetAttributes(path, a & ~FileAttributes.ReadOnly);
+            }
+            catch (Exception) { }
+            File.Delete(path);
+        }
+
+        // the words of any custom dictionary file (Unicode with BOM - what Word writes -, UTF-8, or the old ANSI kind)
+        public static List<string> ReadDicWords(string path)
+        {
+            byte[] raw = File.ReadAllBytes(path);
+            string txt;
+            if (raw.Length >= 2 && raw[0] == 0xFF && raw[1] == 0xFE) txt = Encoding.Unicode.GetString(raw, 2, raw.Length - 2);
+            else if (raw.Length >= 3 && raw[0] == 0xEF && raw[1] == 0xBB && raw[2] == 0xBF) txt = Encoding.UTF8.GetString(raw, 3, raw.Length - 3);
+            else txt = Encoding.Default.GetString(raw);
+            List<string> words = new List<string>();
+            foreach (string line in txt.Split(new char[] { '\n' }))
+            {
+                string w = line.Trim();   // also drops the \r of CRLF
+                if (w.Length > 0) words.Add(w);
+            }
+            return words;
+        }
+
+        // Words in our dictionary file that are not ours. Word puts them there itself when the person clicks "Add to Dictionary" while our file
+        // is Word's DEFAULT custom dictionary (it can become one when it is the only dictionary Word lists). They are the person's words:
+        // an update keeps them in the new file, a removal moves them to CUSTOM.DIC - they are never deleted with our file.
+        // "Ours" = every word of every edition. A version that drops words from the word lists must add the dropped ones to Retired,
+        // otherwise they would be kept as if the person had added them.
+        public static readonly string[] Retired = new string[0];
+
+        public static List<string> ForeignWords(string path)
+        {
+            List<string> found = new List<string>();
+            if (!File.Exists(path)) return found;
+            List<string> inFile = ReadDicWords(path);
+            HashSet<string> ours = new HashSet<string>(BuildWords(true, true), StringComparer.Ordinal);
+            foreach (string w in Retired) ours.Add(w);
+            HashSet<string> seen = new HashSet<string>(StringComparer.Ordinal);
+            foreach (string w in inFile) if (!ours.Contains(w) && seen.Add(w)) found.Add(w);
+            return found;
+        }
+
+        // adds words to a custom dictionary file (made if it is missing), keeping every word already in it; returns how many were new
+        public static int AddWordsToDic(string path, List<string> add)
+        {
+            List<string> all = File.Exists(path) ? ReadDicWords(path) : new List<string>();
+            HashSet<string> have = new HashSet<string>(all, StringComparer.Ordinal);
+            int n = 0;
+            foreach (string w in add) if (have.Add(w)) { all.Add(w); n++; }
+            WriteDic(path, all);
+            return n;
+        }
+
+        // Word custom dictionaries: Unicode (UTF-16 little endian) with BOM, one word per line.
+        public static void WriteDic(string path, List<string> words)
+        {
+            if (FailWriteHook != null && FailWriteHook(path)) throw new IOException("simulated: the file is locked");
+            StringBuilder sb = new StringBuilder(words.Count * 8);
+            foreach (string w in words) { sb.Append(w); sb.Append("\r\n"); }
+            byte[] data = Encoding.Unicode.GetBytes(sb.ToString());
+            using (FileStream fs = new FileStream(path, FileMode.Create, FileAccess.Write))
+            {
+                fs.WriteByte(0xFF); fs.WriteByte(0xFE);
+                fs.Write(data, 0, data.Length);
+            }
+        }
+
+        // ------------------------------------------------ what is installed on this computer
+        public static InstalledInfo DetectInstalled()
+        {
+            InstalledInfo info = new InstalledInfo();
+            try
+            {
+                string d = UProofDir();
+                if (File.Exists(Path.Combine(d, MainFile)))
+                {
+                    bool ext, comp;
+                    if (Stamp.TryReadEdition(out ext, out comp)) { info.Edition = ext ? 2 : 1; info.Compose = comp; }
+                    else info.Edition = 1;
+                }
+                else
+                {
+                    // an older 3.0.0.x installation (several files)
+                    bool b = File.Exists(Path.Combine(d, BasicFile));
+                    bool m = File.Exists(Path.Combine(d, MoreFile));
+                    info.Compose = File.Exists(Path.Combine(d, ComposeFile));
+                    info.Edition = (b && m) ? 2 : (b ? 1 : 0);
+                }
+                if (info.Edition > 0 || info.Compose)
+                {
+                    string v, on;
+                    if (Stamp.TryRead(out v, out on)) { info.Version = v; info.InstalledOn = on; }
+                }
+            }
+            catch (Exception) { }
+            return info;
+        }
+
+        // 0 = same, -1 = installed is older, 1 = installed is newer, 2 = unknown
+        public static int CompareToCurrent(string installed)
+        {
+            try
+            {
+                Version a = new Version(installed), b = new Version(AppVersion);
+                int c = a.CompareTo(b);
+                return c < 0 ? -1 : (c > 0 ? 1 : 0);
+            }
+            catch (Exception) { return 2; }
+        }
+
+        // The Microsoft Word that is installed on this computer, read from the registry (no need to start Word)
+        public static string WordVersion()
+        {
+            try
+            {
+                using (RegistryKey k = Registry.ClassesRoot.OpenSubKey(@"Word.Application\CurVer"))
+                {
+                    if (k == null) return null;
+                    string v = k.GetValue(null) as string;   // e.g. Word.Application.16
+                    if (string.IsNullOrEmpty(v)) return null;
+                    string num = v.Substring(v.LastIndexOf('.') + 1);
+                    return WordVersionLabel(num, num == "16" ? ReadOfficeReleaseIds() : null);
+                }
+            }
+            catch (Exception) { return null; }
+        }
+
+        // Office 2016, 2019, 2021, 2024 and Microsoft 365 all call themselves "16"; the way Office was installed tells them apart
+        static string ReadOfficeReleaseIds()
+        {
+            foreach (RegistryView view in new RegistryView[] { RegistryView.Registry64, RegistryView.Registry32 })
+            {
+                try
+                {
+                    using (RegistryKey hk = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, view))
+                    using (RegistryKey k = hk.OpenSubKey(@"SOFTWARE\Microsoft\Office\ClickToRun\Configuration"))
+                    {
+                        if (k == null) continue;
+                        string ids = k.GetValue("ProductReleaseIds") as string;
+                        if (!string.IsNullOrEmpty(ids)) return ids;
+                    }
+                }
+                catch (Exception) { }
+            }
+            return null;
+        }
+
+        // num = the number after "Word.Application.", releaseIds = Click-to-Run product ids (e.g. "O365ProPlusRetail"), or null
+        public static string WordVersionLabel(string num, string releaseIds)
+        {
+            switch (num)
+            {
+                case "16":
+                    if (!string.IsNullOrEmpty(releaseIds))
+                    {
+                        string ids = releaseIds.ToLowerInvariant();
+                        if (ids.Contains("o365") || ids.Contains("microsoft365") || ids.Contains("m365")) return "Microsoft 365";
+                        if (ids.Contains("2024")) return "2024";
+                        if (ids.Contains("2021")) return "2021";
+                        if (ids.Contains("2019")) return "2019";
+                    }
+                    return "2016 / 2019 / 2021 / 365";
+                case "15": return "2013";
+                case "14": return "2010";
+                case "12": return "2007";
+                case "11": return "2003";
+                default: return "גרסה " + num;
+            }
+        }
+    }
+
+    public class InstalledInfo
+    {
+        public int Edition;          // 0 = none, 1 = basic, 2 = extended
+        public bool Compose;         // "chibur torani" installed
+        public string Version;       // null = installed by an older program (no version recorded)
+        public string InstalledOn;
+    }
+
+    // Remembers which version/edition this program installed, so the next start can tell what is on the computer
+    public static class Stamp
+    {
+        const string KeyPath = @"Software\TorahDictionaryForWord";
+
+        public static void Write(bool extended, bool compose)
+        {
+            try
+            {
+                using (RegistryKey k = Registry.CurrentUser.CreateSubKey(KeyPath))
+                {
+                    k.SetValue("Version", Core.AppVersion, RegistryValueKind.String);
+                    k.SetValue("Edition", extended ? "Extended" : "Basic", RegistryValueKind.String);
+                    k.SetValue("Composition", compose ? 1 : 0, RegistryValueKind.DWord);
+                    k.SetValue("InstalledOn", DateTime.Now.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture), RegistryValueKind.String);
+                }
+            }
+            catch (Exception ex) { Core.Log("Stamp write failed: " + Core.Msg(ex)); }
+        }
+
+        public static bool TryReadEdition(out bool extended, out bool compose)
+        {
+            extended = false; compose = false;
+            try
+            {
+                using (RegistryKey k = Registry.CurrentUser.OpenSubKey(KeyPath))
+                {
+                    if (k == null) return false;
+                    string e = k.GetValue("Edition") as string;
+                    if (e == null) return false;
+                    extended = e == "Extended";
+                    object c = k.GetValue("Composition");
+                    compose = c != null && Convert.ToInt32(c) == 1;
+                    return true;
+                }
+            }
+            catch (Exception) { return false; }
+        }
+
+        public static bool TryRead(out string version, out string installedOn)
+        {
+            version = null; installedOn = null;
+            try
+            {
+                using (RegistryKey k = Registry.CurrentUser.OpenSubKey(KeyPath))
+                {
+                    if (k == null) return false;
+                    version = k.GetValue("Version") as string;
+                    installedOn = k.GetValue("InstalledOn") as string;
+                    return version != null;
+                }
+            }
+            catch (Exception) { return false; }
+        }
+
+        // forgets the installed dictionary (the separate "repeated words" note stays)
+        public static void Clear()
+        {
+            try
+            {
+                using (RegistryKey k = Registry.CurrentUser.OpenSubKey(KeyPath, true))
+                {
+                    if (k == null) return;
+                    foreach (string n in new string[] { "Version", "Edition", "Composition", "InstalledOn" })
+                        k.DeleteValue(n, false);
+                }
+            }
+            catch (Exception) { }
+        }
+
+        // remembers that this program switched off Word's "flag repeated words" (so the button can offer to switch it back on)
+        public static void WriteRepeatOff(bool off)
+        {
+            try
+            {
+                using (RegistryKey k = Registry.CurrentUser.CreateSubKey(KeyPath))
+                    k.SetValue("RepeatedWordsOff", off ? 1 : 0, RegistryValueKind.DWord);
+            }
+            catch (Exception ex) { Core.Log("Stamp (repeat) failed: " + Core.Msg(ex)); }
+        }
+
+        public static bool ReadRepeatOff()
+        {
+            try
+            {
+                using (RegistryKey k = Registry.CurrentUser.OpenSubKey(KeyPath))
+                {
+                    if (k == null) return false;
+                    object v = k.GetValue("RepeatedWordsOff");
+                    return v != null && Convert.ToInt32(v) == 1;
+                }
+            }
+            catch (Exception) { return false; }
+        }
+    }
+
+    // ---------------------------------------------------------------- Word automation (late binding, no Office files needed)
+    public class WordMissingException : Exception
+    {
+        public WordMissingException() : base("Microsoft Word is not installed (Word.Application not registered).") { }
+    }
+
+    public class WordSession : IDisposable
+    {
+        public object App;
+        public bool Created;   // true when we started a hidden Word ourselves
+
+        public void Dispose()
+        {
+            object app = App;
+            App = null;
+            try { if (Created && app != null) WordCom.Call(app, "Quit", 0); } catch (Exception) { }   // 0 = do not save
+            try { if (app != null && Marshal.IsComObject(app)) Marshal.FinalReleaseComObject(app); } catch (Exception) { }
+            app = null;
+            // let the runtime let go of every other Word object it still holds - otherwise a hidden Word can stay alive in the background
+            try { GC.Collect(); GC.WaitForPendingFinalizers(); GC.Collect(); } catch (Exception) { }
+        }
+    }
+
+    public class DictInfo
+    {
+        public string Name;
+        public string Folder;     // the folder Word reported (may be empty)
+        public string FullPath;
+    }
+
+    public static class WordCom
+    {
+        // ---- Word says "I am busy" while it starts up or while a dialog is open (RPC_E_CALL_REJECTED, RPC_E_SERVERCALL_RETRYLATER).
+        // That is not a failure: wait a moment and ask again, for up to RetryMs.
+        public static int RetryMs = 15000;
+        const int BusyWaitMs = 250;
+
+        public static bool IsBusy(Exception ex)
+        {
+            while (ex is TargetInvocationException && ex.InnerException != null) ex = ex.InnerException;
+            COMException ce = ex as COMException;
+            if (ce == null) return false;
+            uint hr = unchecked((uint)ce.ErrorCode);
+            // 0x800AC472 = Word's own "not available right now", which it also answers while it is busy
+            return hr == 0x80010001u || hr == 0x8001010Au || hr == 0x800AC472u;
+        }
+
+        public static T Retry<T>(Func<T> f)
+        {
+            int waited = 0;
+            while (true)
+            {
+                try { return f(); }
+                catch (Exception ex)
+                {
+                    if (!IsBusy(ex) || waited >= RetryMs) throw;
+                    if (waited == 0) Core.Log("Word is busy, waiting a moment…");
+                    Thread.Sleep(BusyWaitMs);
+                    waited += BusyWaitMs;
+                }
+            }
+        }
+
+        public static object Get(object o, string name, params object[] args)
+        { return Retry<object>(delegate { return o.GetType().InvokeMember(name, BindingFlags.GetProperty, null, o, args); }); }
+        public static void Put(object o, string name, object value)
+        { Retry<object>(delegate { o.GetType().InvokeMember(name, BindingFlags.SetProperty, null, o, new object[] { value }); return null; }); }
+        public static object Call(object o, string name, params object[] args)
+        { return Retry<object>(delegate { return o.GetType().InvokeMember(name, BindingFlags.InvokeMethod, null, o, args); }); }
+
+        // ---- the hidden Words this program starts: remember their process, so we can wait until one has really gone
+        // (a fixed pause was a guess: too long on a fast computer, too short on a slow one)
+        static readonly List<int> ours = new List<int>();
+
+        static int mySession = -1;   // the Windows session of this program (-2 = cannot be told)
+
+        // the Word processes of THIS Windows user: on a shared computer another user's Word is in another session, and it neither
+        // holds this person's dictionaries nor can this person close it
+        static int[] WordPids()
+        {
+            try
+            {
+                if (mySession == -1)
+                {
+                    try { using (Process me = Process.GetCurrentProcess()) mySession = me.SessionId; }
+                    catch (Exception) { mySession = -2; }
+                }
+                Process[] ps = Process.GetProcessesByName("WINWORD");
+                List<int> ids = new List<int>();
+                foreach (Process p in ps)
+                {
+                    try
+                    {
+                        bool mine = true;
+                        if (mySession >= 0) { try { mine = p.SessionId == mySession; } catch (Exception) { mine = true; } }
+                        if (mine) ids.Add(p.Id);
+                    }
+                    catch (Exception) { }
+                    finally { p.Dispose(); }
+                }
+                return ids.ToArray();
+            }
+            catch (Exception) { return null; }   // cannot list processes: callers fall back to a fixed pause
+        }
+
+        static bool IsAlive(int pid)
+        {
+            try { using (Process p = Process.GetProcessById(pid)) return !p.HasExited; }
+            catch (Exception) { return false; }   // no such process any more
+        }
+
+        // true = we knew the process of a hidden Word and waited for it; false = nothing known to wait for
+        public static bool WaitForOurWordsToExit(int maxMs)
+        {
+            List<int> mine;
+            lock (ours) mine = new List<int>(ours);
+            if (mine.Count == 0) return false;
+            int waited = 0;
+            while (true)
+            {
+                bool alive = false;
+                foreach (int pid in mine) if (IsAlive(pid)) alive = true;
+                if (!alive || waited >= maxMs) break;
+                Thread.Sleep(100);
+                waited += 100;
+            }
+            lock (ours) ours.RemoveAll(delegate (int pid) { return !IsAlive(pid); });
+            Core.Log("Waited " + waited + " ms for the hidden Word to close.");
+            Thread.Sleep(300);   // a short moment for Word to finish letting go of its files and settings
+            return true;
+        }
+
+        static WordSession Start(string logText)
+        {
+            Type t = Type.GetTypeFromProgID("Word.Application");
+            if (t == null) throw new WordMissingException();
+            WaitForOurWordsToExit(8000);   // an earlier hidden Word may still be closing: starting now could hand us that one
+
+            int[] before = WordPids();
+            WordSession s = new WordSession();
+            s.App = Activator.CreateInstance(t);
+            s.Created = true;
+            int[] after = WordPids();
+            if (before != null && after != null)
+                foreach (int pid in after)
+                    if (Array.IndexOf(before, pid) < 0) lock (ours) ours.Add(pid);
+            try { Put(s.App, "Visible", false); } catch (Exception) { }
+            try { Put(s.App, "DisplayAlerts", 0); } catch (Exception) { }
+            Core.Log(logText);
+            return s;
+        }
+
+        // Only for the self-test: a pretend Word in place of a real one.
+        public static Func<WordSession> OpenHook, OpenNewHook;
+
+        // How many Word processes are running now, visible or hidden (a Word that this program started itself is not counted).
+        // -1 = cannot be told. A running Word cannot show a dictionary that was added to it: it reads its list when it starts.
+        public static int RunningWordCount()
+        {
+            int[] ids = WordPids();
+            if (ids == null) return -1;
+            int n = 0;
+            lock (ours) { foreach (int id in ids) if (!ours.Contains(id)) n++; }
+            return n;
+        }
+
+        // always a NEW hidden Word, which reads the custom dictionaries the way Word does when the user opens it
+        public static WordSession OpenNew()
+        {
+            if (OpenNewHook != null) return OpenNewHook();
+            return Start("Started a new hidden Word for the check.");
+        }
+
+        public static WordSession Open()
+        {
+            if (OpenHook != null) return OpenHook();
+            WaitForOurWordsToExit(8000);   // a hidden Word of ours that is still closing must not be taken for the person's Word
+            try
+            {
+                WordSession s = new WordSession();
+                s.App = Marshal.GetActiveObject("Word.Application");   // Word is already open
+                s.Created = false;
+                Core.Log("Attached to a running Word.");
+                return s;
+            }
+            catch (Exception) { }
+            return Start("Started a hidden Word.");
+        }
+
+        public static object Item(object coll, int i)
+        {
+            try { return Get(coll, "Item", i); }
+            catch (Exception) { return Call(coll, "Item", i); }
+        }
+
+        public static int RemoveOurs(WordSession s)
+        {
+            int removed = 0;
+            object dicts = Get(s.App, "CustomDictionaries");
+            int n = Convert.ToInt32(Get(dicts, "Count"));
+            for (int i = n; i >= 1; i--)
+            {
+                object d = Item(dicts, i);
+                string name = Convert.ToString(Get(d, "Name"));
+                if (Core.IsOurs(name))
+                {
+                    Call(d, "Delete");
+                    removed++;
+                    Core.Log("Unregistered from Word: " + name);
+                }
+            }
+            return removed;
+        }
+
+        public static void Add(WordSession s, string path)
+        {
+            object dicts = Get(s.App, "CustomDictionaries");
+            object d = Call(dicts, "Add", path);
+            try { Put(d, "LanguageSpecific", false); } catch (Exception) { }   // apply to every language, Hebrew included
+            Core.Log("Registered in Word: " + path);
+        }
+
+        // Word puts the words the person adds ("Add to Dictionary") into its DEFAULT custom dictionary. That must never be ours: our file is
+        // rewritten by every update and deleted by a removal. If ours is the default, another dictionary of the list becomes the default;
+        // if Word lists no other one, Word's usual personal dictionary CUSTOM.DIC is made (empty) and added.
+        // Never fails the installation: a problem here only goes to the log.
+        public static void KeepOursNotDefault(WordSession s, string folder)
+        {
+            try
+            {
+                object dicts = Get(s.App, "CustomDictionaries");
+                string active = null;
+                bool known = false;
+                try
+                {
+                    object a = Get(dicts, "ActiveCustomDictionary");
+                    known = true;
+                    if (a != null) active = Convert.ToString(Get(a, "Name"));
+                }
+                catch (Exception ex) { Core.Log("The default custom dictionary could not be read: " + Core.Msg(ex)); }
+                Core.Log("Word's default custom dictionary: " + (active ?? (known ? "(none)" : "(unknown)")));
+                if (active != null && !Core.IsOurs(active)) return;
+
+                object other = null;
+                int best = int.MaxValue;
+                int n = Convert.ToInt32(Get(dicts, "Count"));
+                for (int i = 1; i <= n; i++)
+                {
+                    object d = Item(dicts, i);
+                    string name = Convert.ToString(Get(d, "Name"));
+                    if (Core.IsOurs(name)) continue;
+                    int rank = string.Equals(name, "RoamingCustom.dic", StringComparison.OrdinalIgnoreCase) ? 0
+                             : string.Equals(name, "CUSTOM.DIC", StringComparison.OrdinalIgnoreCase) ? 1 : 2;
+                    if (rank < best) { best = rank; other = d; }
+                }
+                // the default could not be read, and the person has dictionaries of their own: Word's choice is left alone
+                if (!known && other != null) return;
+                if (other == null)
+                {
+                    string custom = Path.Combine(folder, "CUSTOM.DIC");
+                    if (!File.Exists(custom)) Core.WriteDic(custom, new List<string>());   // an empty personal dictionary, as Word itself starts one
+                    other = Call(dicts, "Add", custom);
+                    try { Put(other, "LanguageSpecific", false); } catch (Exception) { }
+                    Core.Log("Added Word's usual personal dictionary: " + custom);
+                }
+                string wanted = Convert.ToString(Get(other, "Name"));
+                try { Put(dicts, "ActiveCustomDictionary", other); }
+                catch (Exception ex) { Core.Log("Setting the default dictionary failed: " + Core.Msg(ex)); }
+                string now = ActiveName(dicts);
+                // if the usual way of setting did not take, the two kinds of COM "set" are tried one after the other
+                foreach (BindingFlags how in new BindingFlags[] { BindingFlags.PutRefDispProperty, BindingFlags.PutDispProperty })
+                {
+                    if (now != null && !Core.IsOurs(now)) break;
+                    BindingFlags h = how;
+                    object target = dicts, value = other;
+                    try { Retry<object>(delegate { target.GetType().InvokeMember("ActiveCustomDictionary", h, null, target, new object[] { value }); return null; }); }
+                    catch (Exception ex) { Core.Log("Setting the default dictionary (" + h + ") failed: " + Core.Msg(ex)); }
+                    now = ActiveName(dicts);
+                }
+                Core.Log("Wanted as the default: " + wanted + "; Word's default custom dictionary is now: " + (now ?? "(unknown)"));
+            }
+            catch (Exception ex) { Core.Log("Could not keep our dictionary from being the default: " + Core.Msg(ex)); }
+        }
+
+        static string ActiveName(object dicts)
+        {
+            try { object a = Get(dicts, "ActiveCustomDictionary"); return a == null ? null : Convert.ToString(Get(a, "Name")); }
+            catch (Exception) { return null; }
+        }
+
+        // is a dictionary with this file name in Word's list?
+        public static bool IsListed(WordSession s, string leaf)
+        {
+            object dicts = Get(s.App, "CustomDictionaries");
+            int n = Convert.ToInt32(Get(dicts, "Count"));
+            for (int i = 1; i <= n; i++)
+                if (string.Equals(Convert.ToString(Get(Item(dicts, i), "Name")), leaf, StringComparison.OrdinalIgnoreCase)) return true;
+            return false;
+        }
+
+        static bool SameFolder(string a, string b)
+        {
+            try { return string.Equals(Path.GetFullPath(a).TrimEnd('\\', '/'), Path.GetFullPath(b).TrimEnd('\\', '/'), StringComparison.OrdinalIgnoreCase); }
+            catch (Exception) { return false; }
+        }
+
+        // makes sure Word lists this very file - same name AND same folder (removal: the person's words were moved into it)
+        public static void EnsureListed(WordSession s, string path)
+        {
+            try
+            {
+                object dicts = Get(s.App, "CustomDictionaries");
+                string leaf = Path.GetFileName(path), folder = Path.GetDirectoryName(path);
+                int n = Convert.ToInt32(Get(dicts, "Count"));
+                for (int i = 1; i <= n; i++)
+                {
+                    object d = Item(dicts, i);
+                    if (!string.Equals(Convert.ToString(Get(d, "Name")), leaf, StringComparison.OrdinalIgnoreCase)) continue;
+                    string f = null;
+                    try { f = Convert.ToString(Get(d, "Path")); } catch (Exception) { }
+                    if (string.IsNullOrEmpty(f) || SameFolder(f, folder)) return;   // no folder from Word: its usual folder is meant
+                }
+                object nd = Call(dicts, "Add", path);
+                try { Put(nd, "LanguageSpecific", false); } catch (Exception) { }
+                Core.Log("Listed in Word: " + path);
+            }
+            catch (Exception ex) { Core.Log("Could not list " + path + " in Word: " + Core.Msg(ex)); }
+        }
+
+        // every custom dictionary Word currently has, whoever added it
+        public static List<DictInfo> ListAll(WordSession s)
+        {
+            List<DictInfo> list = new List<DictInfo>();
+            object dicts = Get(s.App, "CustomDictionaries");
+            int n = Convert.ToInt32(Get(dicts, "Count"));
+            for (int i = 1; i <= n; i++)
+            {
+                try
+                {
+                    object d = Item(dicts, i);
+                    DictInfo di = new DictInfo();
+                    di.Name = Convert.ToString(Get(d, "Name"));
+                    string p = null;
+                    try { p = Convert.ToString(Get(d, "Path")); } catch (Exception) { }
+                    di.Folder = p;
+                    di.FullPath = Core.ResolveDicPath(p, di.Name);   // null when the file cannot be found
+                    list.Add(di);
+                }
+                catch (Exception ex) { Core.Log("ListAll item failed: " + Core.Msg(ex)); }
+            }
+            return list;
+        }
+
+        // removes every custom dictionary from Word; names of the ones Word refused go to 'refused'
+        public static int RemoveAll(WordSession s, List<string> refused)
+        {
+            int removed = 0;
+            object dicts = Get(s.App, "CustomDictionaries");
+            int n = Convert.ToInt32(Get(dicts, "Count"));
+            for (int i = n; i >= 1; i--)
+            {
+                string name = "?";
+                try
+                {
+                    object d = Item(dicts, i);
+                    name = Convert.ToString(Get(d, "Name"));
+                    Call(d, "Delete");
+                    removed++;
+                    Core.Log("Advanced removal, unregistered: " + name);
+                }
+                catch (Exception ex) { refused.Add(name); Core.Log("Advanced removal, Word refused " + name + ": " + Core.Msg(ex)); }
+            }
+            return removed;
+        }
+
+        // Word option "Flag repeated words" (File > Options > Proofing)
+        public static bool SetRepeatWords(WordSession s, bool flag)
+        {
+            object opts = Get(s.App, "Options");
+            Put(opts, "RepeatWord", flag);
+            bool now = Convert.ToBoolean(Get(opts, "RepeatWord"));
+            Core.Log("Options.RepeatWord set to " + flag + ", now " + now);
+            return now == flag;
+        }
+    }
+
+    // ---------------------------------------------------------------- fallback: write the registry list Word reads at start-up
+    public static class RegFallback
+    {
+        public const string KeyPath = @"Software\Microsoft\Shared Tools\Proofing Tools\1.0\Custom Dictionaries";
+
+        // writes what the registry list holds into the log (diagnostics only; shows whether Word itself writes its list there)
+        public static void DumpToLog(string when)
+        {
+            try
+            {
+                using (RegistryKey k = Registry.CurrentUser.OpenSubKey(KeyPath))
+                {
+                    if (k == null) { Core.Log("Registry list (" + when + "): the key does not exist"); return; }
+                    StringBuilder sb = new StringBuilder();
+                    foreach (string vn in k.GetValueNames()) sb.Append(vn + "=" + Convert.ToString(k.GetValue(vn)) + "; ");
+                    Core.Log("Registry list (" + when + "): " + (sb.Length == 0 ? "empty" : sb.ToString()));
+                }
+            }
+            catch (Exception ex) { Core.Log("Registry list dump failed: " + Core.Msg(ex)); }
+        }
+
+        // Every entry is a number ("3" = the file); Office may keep settings next to it under the same number ("3_state", "3_culturetag").
+        static int NumberOf(string valueName)
+        {
+            int cut = valueName.IndexOf('_');
+            string head = cut >= 0 ? valueName.Substring(0, cut) : valueName;
+            int n;
+            return int.TryParse(head, NumberStyles.None, CultureInfo.InvariantCulture, out n) ? n : -1;
+        }
+
+        // an entry goes together with its settings, so that a later entry with the same number does not inherit them
+        static void DeleteEntry(RegistryKey k, string vn)
+        {
+            k.DeleteValue(vn, false);
+            foreach (string other in k.GetValueNames())
+                if (other.StartsWith(vn + "_", StringComparison.OrdinalIgnoreCase)) k.DeleteValue(other, false);
+        }
+
+        static string Leaf(string path)
+        {
+            try { return Path.GetFileName(path); }
+            catch (Exception) { return null; }   // characters that are not allowed in a path
+        }
+
+        public static void Add(string path)
+        {
+            using (RegistryKey k = Registry.CurrentUser.CreateSubKey(KeyPath))
+            {
+                int max = 0;
+                foreach (string vn in k.GetValueNames())
+                {
+                    int n = NumberOf(vn);
+                    if (n > max) max = n;   // also numbers that only left-over settings use
+                    if (vn.IndexOf('_') >= 0) continue;
+                    string v = k.GetValue(vn) as string;
+                    if (v != null && string.Equals(v, path, StringComparison.OrdinalIgnoreCase)) return;   // already there
+                }
+                k.SetValue((max + 1).ToString(CultureInfo.InvariantCulture), path, RegistryValueKind.String);
+                Core.Log("Registry fallback: added " + path);
+            }
+        }
+
+        // every entry of ours
+        public static void RemoveOurs() { Remove(true); }
+
+        // only the entries of the old several-file versions; an entry of the one file of today stays
+        public static void RemoveLegacy() { Remove(false); }
+
+        static void Remove(bool includingMain)
+        {
+            using (RegistryKey k = Registry.CurrentUser.OpenSubKey(KeyPath, true))
+            {
+                if (k == null) return;
+                foreach (string vn in k.GetValueNames())
+                {
+                    if (vn.IndexOf('_') >= 0) continue;   // a setting: it goes with its entry
+                    string v = k.GetValue(vn) as string;
+                    string leaf = v == null ? null : Leaf(v);
+                    if (leaf == null || !Core.IsOurs(leaf)) continue;
+                    if (!includingMain && string.Equals(leaf, Core.MainFile, StringComparison.OrdinalIgnoreCase)) continue;
+                    DeleteEntry(k, vn);
+                    Core.Log("Registry fallback: removed " + v);
+                }
+            }
+        }
+
+        // advanced removal: drops every custom dictionary entry from the registry list; returns what it removed (for the backup note)
+        public static List<string> RemoveAllDictionaries()
+        {
+            List<string> removed = new List<string>();
+            using (RegistryKey k = Registry.CurrentUser.OpenSubKey(KeyPath, true))
+            {
+                if (k == null) return removed;
+                foreach (string vn in k.GetValueNames())
+                {
+                    if (vn.IndexOf('_') >= 0) continue;
+                    string v = k.GetValue(vn) as string;
+                    if (v != null && v.EndsWith(".dic", StringComparison.OrdinalIgnoreCase))
+                    {
+                        removed.Add(v);
+                        DeleteEntry(k, vn);
+                        Core.Log("Registry (advanced): removed " + v);
+                    }
+                }
+            }
+            return removed;
+        }
+    }
+
+    // ---------------------------------------------------------------- the whole install / remove procedure (UI-independent, so it can be tested)
+    public class Result
+    {
+        public bool Ok;
+        public string Title;
+        public string Text;
+        public bool WordWasOpen;
+    }
+
+    public delegate void ProgressFn(int percent, string text);
+
+    public static class Installer
+    {
+        public static Result Install(bool extended, bool compose, ProgressFn progress, bool useWord)
+        {
+            Result res = new Result();
+            string dir = Core.UProofDir();
+            Core.Log("==== install " + Core.AppVersion + ", extended=" + extended + ", composition=" + compose);
+
+            Stopwatch sw = Stopwatch.StartNew();
+            progress(4, "מכין את רשימת המילים…");
+            Directory.CreateDirectory(dir);
+            string mainPath = Path.Combine(dir, Core.MainFile);
+            string tmpPath = mainPath + ".tmp";
+
+            // the word list is prepared in the background while Word starts (starting Word is the slow part), and so are the words
+            // the person may have added into our file through Word: they are kept (Core.ForeignWords)
+            List<string> words = null, theirs = null;
+            Exception buildError = null;
+            Thread builder = new Thread(delegate ()
+            {
+                try
+                {
+                    words = Core.BuildWords(extended, compose);
+                    try { theirs = Core.ForeignWords(mainPath); }
+                    catch (Exception ex) { theirs = new List<string>(); Core.Log("Reading the old dictionary file failed: " + Core.Msg(ex)); }
+                }
+                catch (Exception ex) { buildError = ex; }
+            });
+            builder.IsBackground = true;
+            builder.Start();
+
+            WordSession ws = null;
+            string comProblem = null;
+            bool wordMissing = false;
+            if (useWord)
+            {
+                progress(15, "מתחבר לוורד (בפעם הראשונה זה יכול לקחת כמה שניות)…");
+                try { ws = WordCom.Open(); res.WordWasOpen = !ws.Created; }
+                catch (WordMissingException) { wordMissing = true; Core.Log("Word missing"); }
+                catch (Exception ex) { comProblem = Core.Msg(ex); Core.Log("Word open failed: " + comProblem); }
+            }
+            bool startedHidden = ws != null && ws.Created;   // a hidden Word of our own: the result can be checked afterwards in a new one
+            builder.Join();
+            if (buildError != null)
+            {
+                if (ws != null) ws.Dispose();
+                throw new InvalidOperationException("לא הצלחתי להכין את רשימת המילים: " + Core.Msg(buildError), buildError);
+            }
+            List<string> toWrite = words;
+            if (theirs != null && theirs.Count > 0)
+            {
+                toWrite = new List<string>(words.Count + theirs.Count);
+                toWrite.AddRange(words);
+                toWrite.AddRange(theirs);
+                Core.Log("Kept " + theirs.Count + " word(s) that the person had added into our file through Word");
+            }
+            Core.Log("timing: word list ready and Word connected after " + sw.ElapsedMilliseconds + " ms (" + words.Count + " words)");
+
+            try
+            {
+                // 1. the new file is written NEXT TO the old one first: if that fails (no room, no permission), nothing has been changed yet
+                progress(25, "כותב את קובץ המילון…");
+                try { Core.WriteDic(tmpPath, toWrite); }
+                catch (Exception ex)
+                {
+                    TryDelete(tmpPath);
+                    if (!IsFileProblem(ex)) throw;
+                    Core.Log("Write failed (new file): " + Core.Msg(ex));
+                    return WriteFailed(res, ex);
+                }
+
+                // 2. Word lets go of the old dictionary
+                if (ws != null)
+                {
+                    RegFallback.DumpToLog("before the old dictionary is removed");
+                    progress(35, "מסיר גרסה קודמת של המילון (אם יש)…");
+                    try { WordCom.RemoveOurs(ws); }
+                    catch (Exception ex) { Core.Log("RemoveOurs failed: " + Core.Msg(ex)); }
+                }
+
+                // 3. the dictionary file itself gets the new words, overwritten in place - the way that has always worked, also while Word is open.
+                //    If that fails, a second try copies the complete new file over it (this also mends an old file that was emptied before the
+                //    first try failed, e.g. on a full disk). If both fail, the old dictionary goes back into Word, so Word keeps what it had.
+                progress(50, "מעדכן את קובץ המילון…");
+                Exception writeError = null;
+                try { Core.WriteDic(mainPath, toWrite); }
+                catch (Exception ex) { writeError = ex; Core.Log("Write failed: " + Core.Msg(ex) + " - a second try: the new file is copied over it"); }
+                if (writeError != null && !Directory.Exists(mainPath))   // (a folder of that name: a copy would land inside it)
+                {
+                    try
+                    {
+                        Core.CopyFile(tmpPath, mainPath);
+                        if (new FileInfo(mainPath).Length != new FileInfo(tmpPath).Length) throw new IOException("the copy is not complete");
+                        writeError = null;
+                        Core.Log("The second try worked");
+                    }
+                    catch (Exception ex) { Core.Log("The second try failed too: " + Core.Msg(ex)); }
+                }
+                if (writeError != null)
+                {
+                    if (ws != null && File.Exists(mainPath))
+                    {
+                        try
+                        {
+                            if (!WordCom.IsListed(ws, Core.MainFile)) { WordCom.Add(ws, mainPath); Core.Log("The old dictionary was given back to Word"); }
+                        }
+                        catch (Exception ex2) { Core.Log("Could not give the old dictionary back to Word: " + Core.Msg(ex2)); }
+                    }
+                    // the complete new file stays next to the old one (the old one may have been cut off); the next installation replaces both
+                    if (!File.Exists(mainPath)) Stamp.Clear();   // nothing of ours is installed: the window must not say otherwise
+                    if (!IsFileProblem(writeError)) throw new InvalidOperationException(Core.Msg(writeError), writeError);
+                    return WriteFailed(res, writeError);
+                }
+                TryDelete(tmpPath);
+                foreach (string f in Core.LegacyFiles)   // files of older versions (several files)
+                {
+                    string p = Path.Combine(dir, f);
+                    if (File.Exists(p)) { try { Core.DeleteFile(p); Core.Log("Deleted old file " + f); } catch (Exception ex) { Core.Log("Delete failed " + f + ": " + Core.Msg(ex)); } }
+                }
+
+                // 4. Word gets the new dictionary (a second try if it refuses once)
+                bool registered = false;
+                if (ws != null)
+                {
+                    progress(70, "מוסיף את המילון לוורד…");
+                    try { WordCom.Add(ws, mainPath); registered = true; }
+                    catch (Exception ex)
+                    {
+                        Core.Log("Word add failed: " + Core.Msg(ex) + " - trying once more");
+                        try
+                        {
+                            Thread.Sleep(1000);
+                            try { WordCom.RemoveOurs(ws); } catch (Exception) { }   // never two entries of ours
+                            WordCom.Add(ws, mainPath);
+                            registered = true;
+                        }
+                        catch (Exception ex2) { comProblem = Core.Msg(ex2); Core.Log("Word add failed again: " + comProblem); }
+                    }
+                    Core.Log("timing: dictionary written and added to Word after " + sw.ElapsedMilliseconds + " ms");
+                    if (registered)
+                    {
+                        WordCom.KeepOursNotDefault(ws, dir);
+                        RegFallback.DumpToLog("right after Word added the dictionary");
+                    }
+                }
+
+                // 5. Word did not take it: the list in the registry that Word reads when it starts (whether it does is checked below)
+                bool viaRegistry = false;
+                if (!registered)
+                {
+                    // Word may write its own list into the registry when it closes: our hidden Word is closed first, so it cannot wipe our entry
+                    if (ws != null && ws.Created)
+                    {
+                        ws.Dispose(); ws = null;
+                        if (!WordCom.WaitForOurWordsToExit(8000)) Thread.Sleep(1500);
+                    }
+                    progress(75, "רושם את המילון בהגדרות של וורד…");
+                    try { RegFallback.RemoveOurs(); RegFallback.Add(mainPath); viaRegistry = true; }
+                    catch (Exception ex) { Core.Log("Registry fallback failed: " + Core.Msg(ex)); }
+                }
+
+                if (registered || viaRegistry) Stamp.Write(extended, compose);
+
+                // 6. ask Word itself whether it now knows the words - but only in a Word that this program started itself.
+                // A Word that was already running does not know a dictionary that is added to it before it is started again,
+                // so asking it would give a wrong "it does not recognize the words" (this is what happened on 2-11-2026 at 13:53).
+                // After the registry route the same check tells whether Word reads that list.
+                string check = null;
+                int verdict = -1;   // 1 = all sample words known, 0 = some are not, -1 = the check did not run
+                if ((registered || viaRegistry) && res.WordWasOpen)
+                {
+                    Core.Log("Word was already running: the automatic check is skipped (a running Word reads its dictionaries only when it starts)");
+                }
+                else if ((registered || viaRegistry) && startedHidden)
+                {
+                    progress(82, "בודק שוורד מזהה את המילים (כמה שניות)…");
+                    WordSession vs = null;
+                    try
+                    {
+                        if (ws != null)
+                        {
+                            ws.Dispose(); ws = null;
+                            if (!WordCom.WaitForOurWordsToExit(8000)) Thread.Sleep(1500);   // let the first Word close completely
+                        }
+                        RegFallback.DumpToLog("after the first Word closed");
+                        vs = WordCom.OpenNew();
+                        check = Verify.Run(vs, words, true, out verdict);
+                    }
+                    catch (Exception ex) { check = "הבדיקה האוטומטית לא הצליחה (" + Core.Msg(ex) + ")."; Core.Log("Verify failed: " + Core.Msg(ex)); }
+                    finally { if (vs != null) vs.Dispose(); }
+                    Core.Log("timing: check finished after " + sw.ElapsedMilliseconds + " ms");
+                }
+
+                progress(100, "הסתיים");
+                Core.Log("timing: install finished after " + sw.ElapsedMilliseconds + " ms");
+                string name = (extended ? "המורחב" : "הבסיסי") + (compose ? " + חיבור תורני" : "");
+                string countText = words.Count.ToString("N0");
+
+                if (registered || (viaRegistry && verdict == 1))
+                {
+                    Describe(res, name, countText, check, verdict);
+                }
+                else if (viaRegistry && verdict == 0)
+                {
+                    res.Ok = false;
+                    res.Title = "צריך להשלים ידנית";
+                    res.Text = "המילון " + name + " (" + countText + " מילים) נשמר, אבל וורד לא קיבל אותו, ובבדיקה הוא לא זיהה את המילים.\r\n\r\n"
+                             + "לחצו על \"התקנה ידנית\" ופעלו לפי ההוראות (לוקח חצי דקה)."
+                             + (check != null ? "\r\n\r\n" + check : "")
+                             + (comProblem != null ? "\r\n\r\nפרטי השגיאה: " + comProblem : "");
+                }
+                else if (viaRegistry)
+                {
+                    // registered only in the registry list, and nothing could check that Word reads it: never reported as done
+                    res.Ok = false;
+                    res.Title = "המילון נשמר – צריך לבדוק";
+                    res.Text = "המילון " + name + " (" + countText + " מילים) נשמר ונרשם בהגדרות של וורד, אבל לא הצלחתי לוודא שוורד משתמש בו.\r\n\r\n"
+                             + "סגרו את וורד אם הוא פתוח, פתחו אותו מחדש והקלידו מילה תורנית, למשל מיבעי.\r\n"
+                             + "אם היא מסומנת בקו אדום, לחצו על \"התקנה ידנית\" ופעלו לפי ההוראות."
+                             + (wordMissing ? "\r\n\r\n(לא מצאתי וורד מותקן במחשב הזה.)" : "")
+                             + (comProblem != null ? "\r\n\r\nפרטי השגיאה: " + comProblem : "");
+                }
+                else
+                {
+                    res.Ok = false;
+                    res.Title = "צריך להשלים ידנית";
+                    res.Text = "קובץ המילון נשמר, אבל לא הצלחתי לרשום אותו בוורד אוטומטית.\r\n\r\n"
+                             + "לחצו על \"התקנה ידנית\" ופעלו לפי ההוראות (לוקח חצי דקה).\r\n\r\n"
+                             + "פרטי השגיאה: " + (comProblem ?? (wordMissing ? "וורד לא נמצא במחשב" : "לא ידוע"));
+                }
+                return res;
+            }
+            finally
+            {
+                if (ws != null) ws.Dispose();
+            }
+        }
+
+        static bool IsFileProblem(Exception ex) { return ex is IOException || ex is UnauthorizedAccessException; }
+
+        static void TryDelete(string path)
+        {
+            try { if (File.Exists(path)) File.Delete(path); }
+            catch (Exception ex) { Core.Log("Could not delete " + path + ": " + Core.Msg(ex)); }
+        }
+
+        static Result WriteFailed(Result res, Exception ex)
+        {
+            res.Ok = false;
+            res.Title = "לא הצלחתי לכתוב את קובץ המילון";
+            res.Text = "הקובץ " + Core.MainFile + " בתיקייה של וורד נעול, או שאין הרשאה לכתוב אליו.\r\n\r\n"
+                     + "סגרו את וורד ונסו שוב. אם זה חוזר, הפעילו מחדש את המחשב ונסו שוב.\r\n\r\n"
+                     + "פרטי השגיאה: " + Core.Msg(ex);
+            return res;
+        }
+
+        // The text after a dictionary was registered in Word. res.WordWasOpen = Word was already running: the check was not made,
+        // and the dictionary will be known to that Word only after it is closed and opened again - never a "does not recognize".
+        internal static void Describe(Result res, string name, string countText, string check, int verdict)
+        {
+            string head = "המילון " + name + " (" + countText + " מילים, בקובץ אחד) נוסף לוורד, גרסה " + Core.AppVersion + ".\r\n\r\n";
+            if (res.WordWasOpen)
+            {
+                res.Ok = true;
+                res.Title = "המילון הותקן – נשאר לסגור את וורד";
+                res.Text = head
+                         + "וורד היה פתוח, ולכן הוא עוד לא מכיר את המילון החדש.\r\n"
+                         + "שמרו וסגרו את וורד (את כל החלונות שלו), פתחו אותו מחדש והקלידו מילה תורנית, למשל מיבעי.\r\n\r\n"
+                         + "אם אין חלון וורד פתוח, ייתכן שוורד רץ ברקע (למשל אחרי תקלה). הפעלה מחדש של המחשב סוגרת אותו.";
+                return;
+            }
+            res.Ok = verdict != 0;
+            res.Title = verdict == 0 ? "המילון הותקן, אבל וורד לא מזהה את כל המילים" : "ההתקנה הושלמה";
+            res.Text = head
+                     + (check != null ? check + "\r\n\r\n" : "")
+                     + "עכשיו פתחו את וורד והקלידו מילה תורנית כדי לבדוק.";
+        }
+
+        // removes only what this program installed
+        public static Result Remove(bool useWord)
+        {
+            Result res = new Result();
+            Core.Log("==== remove " + Core.AppVersion);
+            Stopwatch sw = Stopwatch.StartNew();
+            string dir = Core.UProofDir();
+            string mainPath = Path.Combine(dir, Core.MainFile);
+
+            // words that the person added into our file through Word are not ours to delete: they move to Word's usual personal dictionary
+            List<string> theirs = new List<string>();
+            string customPath = null;
+            bool keepMain = false;
+            try { theirs = Core.ForeignWords(mainPath); }
+            catch (Exception ex) { Core.Log("Reading our dictionary file failed: " + Core.Msg(ex)); }
+            if (theirs.Count > 0)
+            {
+                string cp = Path.Combine(dir, "CUSTOM.DIC");
+                try
+                {
+                    if (File.Exists(cp)) Core.CopyFile(cp, cp + ".bak");   // the person's own dictionary as it was, before it is changed
+                    int added = Core.AddWordsToDic(cp, theirs);
+                    customPath = cp;
+                    Core.Log("Moved " + theirs.Count + " word(s) of the person to " + cp + " (" + added + " of them new there)");
+                }
+                catch (Exception ex) { keepMain = true; Core.Log("Could not save the person's words: " + Core.Msg(ex) + " - nothing is removed"); }
+            }
+            if (keepMain)
+            {
+                // their words could not be saved anywhere else: nothing is removed, not even from Word's list, so they go on working
+                res.Ok = false;
+                res.Title = "ההסרה לא הושלמה";
+                res.Text = "לא הסרתי את המילון: בקובץ " + Core.MainFile + " יש מילים שהוספתם בעצמכם לוורד, ולא הצלחתי לשמור אותן במקום אחר.\r\n\r\n"
+                         + "סגרו את וורד ולחצו שוב על \"הסר מוורד\".";
+                return res;
+            }
+
+            int removedInWord = 0;
+            string problem = null;
+            WordSession ws = null;
+            RegFallback.DumpToLog("before the removal");
+            if (useWord)
+            {
+                try
+                {
+                    ws = WordCom.Open();
+                    removedInWord = WordCom.RemoveOurs(ws);
+                    if (customPath != null) { WordCom.EnsureListed(ws, customPath); WordCom.KeepOursNotDefault(ws, dir); }
+                }
+                catch (WordMissingException) { }
+                catch (Exception ex) { problem = Core.Msg(ex); Core.Log("Word remove failed: " + problem); }
+                finally { if (ws != null) ws.Dispose(); }
+                Core.Log("timing: Word step of the removal took " + sw.ElapsedMilliseconds + " ms");
+            }
+            try { RegFallback.RemoveOurs(); } catch (Exception ex) { Core.Log("Registry remove failed: " + Core.Msg(ex)); }
+            int deleted = 0;
+            List<string> stuck = new List<string>();
+            foreach (string f in Core.OurFiles)
+            {
+                string p = Path.Combine(dir, f);
+                if (!File.Exists(p)) continue;
+                try { Core.DeleteFile(p); deleted++; }
+                catch (Exception ex) { stuck.Add(f); Core.Log("Delete failed " + f + ": " + Core.Msg(ex)); }
+            }
+            if (stuck.Count == 0) Stamp.Clear();   // otherwise the window goes on showing what is still on the computer
+
+            if (stuck.Count > 0)
+            {
+                res.Ok = false;
+                res.Title = "ההסרה לא הושלמה";
+                res.Text = "לא הצלחתי למחוק את הקובץ " + string.Join(", ", stuck.ToArray()) + " (ייתכן שוורד או תוכנה אחרת משתמשים בו).\r\n\r\n"
+                         + "סגרו את וורד ולחצו שוב על \"הסר מוורד\". אם זה חוזר, הפעילו מחדש את המחשב ונסו שוב.";
+            }
+            else
+            {
+                res.Ok = true;
+                res.Title = "ההסרה הושלמה";
+                res.Text = (removedInWord + deleted > 0)
+                    ? "המילון התורני הוסר. אם וורד פתוח, סגרו אותו ופתחו מחדש."
+                    : "לא נמצא מילון תורני מותקן.";
+            }
+            if (customPath != null)
+                res.Text += "\r\n\r\n" + theirs.Count.ToString("N0") + " מילים שהוספתם בעצמכם לוורד הועברו למילון האישי של וורד (CUSTOM.DIC), כדי שלא יימחקו.";
+            if (problem != null) res.Text += "\r\n\r\n(הערה: " + problem + ")";
+            return res;
+        }
+
+        // advanced removal: EVERY custom dictionary leaves Word (only Word's own built-in dictionary stays),
+        // including dictionaries and words this program did not add. A backup copy is saved first.
+        public static Result RemoveAdvanced(bool useWord)
+        {
+            Result res = new Result();
+            Core.Log("==== advanced removal");
+            string dir = Core.UProofDir();
+            string backup = Path.Combine(dir, "Backup_" + DateTime.Now.ToString("yyyyMMdd_HHmmss", CultureInfo.InvariantCulture));
+            Directory.CreateDirectory(backup);
+            int unregistered = 0, fromRegistry = 0;
+            List<string> refused = new List<string>();
+            string problem = null;
+            // where every dictionary came from, so that it can be put back by hand (the backup holds the files, this says where they were)
+            StringBuilder note = new StringBuilder();
+            note.Append("Advanced removal " + DateTime.Now.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture) + ", program " + Core.AppVersion + "\r\n");
+
+            // 1. ask Word itself (also saves a copy of every dictionary file it lists)
+            if (useWord)
+            {
+                WordSession ws = null;
+                try
+                {
+                    ws = WordCom.Open();
+                    foreach (DictInfo di in WordCom.ListAll(ws))
+                    {
+                        note.Append("Word list: " + di.Name + " | folder from Word: " + (di.Folder ?? "") + " | file: " + (di.FullPath ?? "(not found)") + "\r\n");
+                        try
+                        {
+                            if (di.FullPath != null && File.Exists(di.FullPath))
+                                File.Copy(di.FullPath, Path.Combine(backup, Path.GetFileName(di.FullPath)), true);
+                        }
+                        catch (Exception ex) { Core.Log("Backup failed for " + di.Name + ": " + Core.Msg(ex)); }
+                    }
+                    unregistered = WordCom.RemoveAll(ws, refused);
+                    foreach (string r in refused) note.Append("Word refused to remove: " + r + "\r\n");
+                }
+                catch (WordMissingException) { }
+                catch (Exception ex) { problem = Core.Msg(ex); Core.Log("Advanced removal, Word failed: " + problem); }
+                finally { if (ws != null) ws.Dispose(); }
+            }
+
+            // 2. registry list that Word reads at start-up
+            try
+            {
+                List<string> gone = RegFallback.RemoveAllDictionaries();
+                fromRegistry = gone.Count;
+                foreach (string g in gone) note.Append("Registry list: " + g + "\r\n");
+                if (gone.Count > 0) File.WriteAllLines(Path.Combine(backup, "registry-dictionary-list.txt"), gone.ToArray(), Encoding.UTF8);
+            }
+            catch (Exception ex) { Core.Log("Registry (advanced) failed: " + Core.Msg(ex)); }
+
+            // 3. the dictionary files themselves (otherwise Word would pick CUSTOM.DIC up again by itself)
+            int moved = 0;
+            List<string> locked = new List<string>();
+            try
+            {
+                foreach (string f in Directory.GetFiles(dir))
+                {
+                    if (!f.EndsWith(".dic", StringComparison.OrdinalIgnoreCase)) continue;   // CUSTOM.DIC, custom.dic ... any case
+                    string leaf = Path.GetFileName(f);
+                    try
+                    {
+                        File.Copy(f, Path.Combine(backup, leaf), true);
+                        note.Append("File in the UProof folder: " + f + "\r\n");
+                        try { Core.DeleteFile(f); moved++; }
+                        catch (Exception)
+                        {
+                            Core.WriteDic(f, new List<string>());   // cannot delete (Word holds it): empty it instead, the copy is safe
+                            moved++;
+                        }
+                    }
+                    catch (Exception ex) { locked.Add(leaf); Core.Log("Could not clear " + leaf + ": " + Core.Msg(ex)); }
+                }
+            }
+            catch (Exception ex) { Core.Log("Advanced removal, file step failed: " + Core.Msg(ex)); }
+
+            Stamp.Clear();
+
+            bool any = (unregistered + moved + fromRegistry) > 0;
+            bool backedUp = false;   // copies were made (also when Word then refused to let a dictionary go)
+            try { backedUp = Directory.GetFiles(backup).Length > 0; } catch (Exception) { }
+            if (any || backedUp)
+            {
+                try { File.WriteAllText(Path.Combine(backup, "dictionaries.txt"), note.ToString(), new UTF8Encoding(true)); }   // with a BOM, so Notepad shows it right
+                catch (Exception ex) { Core.Log("Could not write the backup note: " + Core.Msg(ex)); }
+            }
+            res.Ok = locked.Count == 0 && refused.Count == 0 && problem == null;
+            res.Title = res.Ok ? "ההסרה המתקדמת הושלמה" : "ההסרה הושלמה חלקית";
+            StringBuilder t = new StringBuilder();
+            if (!any && res.Ok) t.Append("לא נמצאו מילונים מותאמים להסרה.\r\n\r\n");
+            else if (res.Ok) t.Append("כל המילונים המותאמים אישית הוסרו מוורד. נשאר רק המילון המובנה של וורד.\r\n\r\n");
+            else if (any) t.Append("חלק מהמילונים המותאמים אישית הוסרו מוורד.\r\n\r\n");
+            else t.Append("לא הצלחתי להסיר את המילונים המותאמים אישית.\r\n\r\n");
+            if (any || backedUp) t.Append("עותק גיבוי של כל מה שהוסר נשמר בתיקייה:\r\n" + backup + "\r\n(הקובץ dictionaries.txt שבה אומר מאיפה הגיע כל מילון.)\r\n\r\nאם וורד פתוח, סגרו אותו ופתחו מחדש.");
+            else try { Directory.Delete(backup); } catch (Exception) { }
+            if (refused.Count > 0) t.Append("\r\n\r\nוורד לא הסכים להסיר: " + string.Join(", ", refused.ToArray()) + ". סגרו את וורד ולחצו שוב.");
+            if (locked.Count > 0) t.Append("\r\n\r\nלא הצלחתי לנקות: " + string.Join(", ", locked.ToArray()) + ". סגרו את וורד ולחצו שוב.");
+            if (problem != null) t.Append("\r\n\r\n(הערה: " + problem + ")");
+            res.Text = t.ToString();
+            return res;
+        }
+
+        // Word option "Flag repeated words": false = Word stops marking repeated words (all of them), true = marking is back on
+        public static Result SetRepeatedWords(bool flag)
+        {
+            Result res = new Result();
+            Core.Log("==== repeated words flag -> " + flag);
+            WordSession ws = null;
+            try
+            {
+                ws = WordCom.Open();
+                res.WordWasOpen = !ws.Created;
+                bool ok = WordCom.SetRepeatWords(ws, flag);
+                res.Ok = ok;
+                if (ok)
+                {
+                    Stamp.WriteRepeatOff(!flag);
+                    res.Title = flag ? "סימון מילים כפולות הוחזר" : "סימון מילים כפולות כובה";
+                    res.Text = flag
+                        ? "וורד יסמן שוב מילים שחוזרות פעמיים ברצף."
+                        : "וורד כבר לא יסמן כשגיאה מילים שחוזרות פעמיים ברצף - אף אחת מהן, בכל המסמכים.\r\n\r\n"
+                          + (res.WordWasOpen ? "וורד היה פתוח, והשינוי חל עכשיו." : "השינוי יחול בפעם הבאה שתפתחו את וורד.");
+                }
+                else
+                {
+                    res.Title = "לא הצלחתי לשנות";
+                    res.Text = "וורד לא קיבל את השינוי. אפשר לעשות זאת ידנית: בוורד, קובץ ← אפשרויות ← הגהה, ולהסיר את הסימון מהאפשרות של מילים כפולות.";
+                }
+            }
+            catch (WordMissingException)
+            {
+                res.Ok = false; res.Title = "וורד לא נמצא";
+                res.Text = "לא מצאתי וורד מותקן במחשב הזה, ולכן אי אפשר לשנות את ההגדרה.";
+            }
+            catch (Exception ex)
+            {
+                Core.Log("RepeatWord failed: " + Core.Msg(ex));
+                res.Ok = false; res.Title = "לא הצלחתי לשנות";
+                res.Text = "לא הצלחתי להתחבר לוורד.\r\n\r\nאפשר לעשות זאת ידנית: בוורד, קובץ ← אפשרויות ← הגהה, ולהסיר את הסימון מהאפשרות של מילים כפולות.\r\n\r\nפרטי השגיאה: " + Core.Msg(ex);
+            }
+            finally { if (ws != null) ws.Dispose(); }
+            return res;
+        }
+
+        // Manual route: write the files and let the user add them from Word's own settings screen.
+        public static List<string> WriteForManual(bool extended, bool compose)
+        {
+            string dir = Core.UProofDir();
+            Directory.CreateDirectory(dir);
+            string mainPath = Path.Combine(dir, Core.MainFile);
+            List<string> words = Core.BuildWords(extended, compose);
+            List<string> theirs = new List<string>();
+            try { theirs = Core.ForeignWords(mainPath); }
+            catch (Exception ex) { Core.Log("Reading the old dictionary file failed: " + Core.Msg(ex)); }
+            if (theirs.Count > 0) { words.AddRange(theirs); Core.Log("Manual: kept " + theirs.Count + " word(s) the person had added"); }
+            Core.WriteDic(mainPath, words);
+            foreach (string f in Core.LegacyFiles)
+            {
+                string p = Path.Combine(dir, f);
+                try { if (File.Exists(p)) Core.DeleteFile(p); } catch (Exception) { }
+            }
+            try { RegFallback.RemoveLegacy(); } catch (Exception) { }   // an entry for our one file may be what makes Word use it: it stays
+            Stamp.Write(extended, compose);
+            return new List<string> { Core.MainFile };
+        }
+    }
+
+    // ---------------------------------------------------------------- after installing: does Word itself now know the words?
+    // Word is asked the same question that decides the red underline, for sample words spread over the whole file.
+    // Their places in the file are reported too, so if Word stops at some size we can see where.
+    public static class Verify
+    {
+        static readonly string[] Samples = new string[] {
+            "מיבעי", "באנפא", "דבוקין", "דהעניין", "דמסתברא", "החששא", "ויוצרא", "וסרכא",
+            "כדסבירא", "לוחתא", "סמיותא", "תכסיסא", "ודהנושא", "דהמכתב", "מג\"א" };
+        const string NotAWord = "קזקזקזק";     // Word must mark it, otherwise the check itself does not work
+        const string CommonWord = "שלום";       // Word must not mark it
+
+        // true = Word marks the word as a spelling mistake
+        static bool Marked(object content, string word)
+        {
+            WordCom.Put(content, "Text", word);
+            WordCom.Put(content, "LanguageID", 1037);                 // Hebrew
+            try { WordCom.Put(content, "NoProofing", false); } catch (Exception) { }
+            object errs = WordCom.Get(content, "SpellingErrors");
+            return Convert.ToInt32(WordCom.Get(errs, "Count")) > 0;
+        }
+
+        // verdict: 1 = every sample word is known, 0 = some are not, -1 = the check could not be trusted
+        public static string Run(WordSession s, List<string> installed, bool fresh, out int verdict)
+        {
+            verdict = -1;
+            Dictionary<string, int> place = new Dictionary<string, int>(StringComparer.Ordinal);
+            for (int i = 0; i < installed.Count; i++) if (!place.ContainsKey(installed[i])) place[installed[i]] = i + 1;
+
+            List<string> samples = new List<string>();
+            foreach (string w in Samples) if (place.ContainsKey(w)) samples.Add(w);
+            for (int i = installed.Count - 1; i >= 0 && i > installed.Count - 5000; i--)   // and one of the very last words in the file
+            {
+                string w = installed[i];
+                if (w.Length >= 5 && w.IndexOf('"') < 0 && !samples.Contains(w)) { samples.Add(w); break; }
+            }
+
+            StringBuilder dicts = new StringBuilder();
+            try
+            {
+                foreach (DictInfo di in WordCom.ListAll(s))
+                {
+                    string count = "?";
+                    try { if (di.FullPath != null && File.Exists(di.FullPath)) count = Core.CountDicWords(di.FullPath).ToString("N0"); } catch (Exception) { }
+                    if (dicts.Length > 0) dicts.Append(", ");
+                    dicts.Append(di.Name + " (" + count + ")");
+                }
+            }
+            catch (Exception ex) { dicts.Append("? (" + Core.Msg(ex) + ")"); }
+
+            object doc = null;
+            List<string> unknown = new List<string>();
+            bool controlsOk;
+            try
+            {
+                object docs = WordCom.Get(s.App, "Documents");
+                doc = WordCom.Call(docs, "Add", Missing.Value, Missing.Value, Missing.Value, false);   // invisible document
+                object content = WordCom.Get(doc, "Content");
+                bool notAWordMarked = Marked(content, NotAWord);
+                bool commonMarked = Marked(content, CommonWord);
+                controlsOk = notAWordMarked && !commonMarked;
+                Core.Log("Verify controls: nonsense marked=" + notAWordMarked + ", common word marked=" + commonMarked);
+                foreach (string w in samples)
+                {
+                    bool m = Marked(content, w);
+                    Core.Log("Verify " + w + " (place " + place[w] + "): " + (m ? "MARKED" : "ok"));
+                    if (m) unknown.Add(w);
+                }
+            }
+            finally
+            {
+                if (doc != null) { try { WordCom.Call(doc, "Close", 0); } catch (Exception) { } }
+            }
+
+            string where = fresh ? "בוורד חדש שנפתח לבדיקה" : "בוורד שהיה פתוח";
+            StringBuilder t = new StringBuilder();
+            if (!controlsOk)
+            {
+                t.Append("בדיקה אוטומטית: לא הצלחתי לבדוק דרך וורד, צריך לבדוק ידנית.");
+            }
+            else if (unknown.Count == 0)
+            {
+                verdict = 1;
+                t.Append("בדיקה אוטומטית " + where + ": כל " + samples.Count + " מילות הבדיקה מזוהות ✓");
+            }
+            else
+            {
+                verdict = 0;
+                t.Append("בדיקה אוטומטית " + where + ": " + (samples.Count - unknown.Count) + " מתוך " + samples.Count + " מילות בדיקה מזוהות.\r\nלא זוהו: ");
+                for (int i = 0; i < unknown.Count; i++)
+                    t.Append((i > 0 ? ", " : "") + unknown[i] + " (מילה " + place[unknown[i]].ToString("N0") + ")");
+            }
+            t.Append("\r\nמילונים בוורד: " + dicts);
+            Core.Log(t.ToString());
+            return t.ToString();
+        }
+    }
+}
