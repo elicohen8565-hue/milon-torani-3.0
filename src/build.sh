@@ -18,8 +18,12 @@ if [ ! -d "$API" ]; then echo "missing $API  (apt-get install -y mono-devel)"; e
 REFS="-nostdlib -noconfig -lib:$API -r:mscorlib.dll -r:System.dll -r:System.Core.dll -r:System.Drawing.dll -r:System.Windows.Forms.dll"
 RES="-resource:basic.txt.gz,Otzaria.basic.txt.gz -resource:more.txt.gz,Otzaria.more.txt.gz -resource:hebrew_base.txt.gz,Otzaria.hebrew_base.txt.gz -resource:counts.txt,Otzaria.counts.txt"
 OPT="-codepage:utf8 -langversion:5 -optimize+"
+# the key that lets the program open issues in its GitHub repository (stage 4): issue.bin is written by scripts/build_all.sh from the
+# secret ISSUE_TOKEN, already hidden (Suggest.Encode). Without it the program is built without the key and suggestions go through the browser.
+KEY=""
+if [ -f issue.bin ]; then KEY="-resource:issue.bin,Milon.issue.bin"; fi
 
-mcs $REFS $OPT -target:winexe -out:"$OUT/TorahDictionary.exe" -win32icon:app.ico $RES -resource:app.ico,Otzaria.app.ico Core.cs UI.cs
+mcs $REFS $OPT -target:winexe -out:"$OUT/TorahDictionary.exe" -win32icon:app.ico $RES -resource:app.ico,Otzaria.app.ico $KEY Core.cs UI.cs Words.cs
 mcs $REFS $OPT -target:exe -main:OtzariaDict.DevDump -out:"$OUT/DevDump.exe" $RES Core.cs DevDump.cs
 
 # second guard, on the finished program: look inside it (Mono.Cecil) and check every .NET library member it uses against the reference assemblies

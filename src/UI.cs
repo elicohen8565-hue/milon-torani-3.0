@@ -13,9 +13,9 @@ using System.Windows.Forms;
 [assembly: AssemblyTitle("המילון התורני 3.0")]
 [assembly: AssemblyProduct("המילון התורני 3.0")]
 [assembly: AssemblyDescription("מתקין מילון תורני (תנ״ך, משנה, בבלי, ירושלמי ועוד) ל-Microsoft Word")]
-[assembly: AssemblyVersion("3.0.0.8")]
-[assembly: AssemblyFileVersion("3.0.0.8")]
-[assembly: AssemblyInformationalVersion("3.0.0.8")]
+[assembly: AssemblyVersion("3.0.0.9")]
+[assembly: AssemblyFileVersion("3.0.0.9")]
+[assembly: AssemblyInformationalVersion("3.0.0.9")]
 
 namespace OtzariaDict
 {
@@ -192,6 +192,7 @@ namespace OtzariaDict
     {
         public BaseControl()
         {
+            TabStop = false;   // controls that can be used (buttons, rows, lists, links) turn it on
             SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw | ControlStyles.SupportsTransparentBackColor, true);
         }
     }
@@ -305,6 +306,7 @@ namespace OtzariaDict
     {
         public BtnStyle Style = BtnStyle.Filled;
         public bool Light;   // quiet secondary button: regular weight text
+        public bool Small;   // small text (the buttons inside a row of the word list)
         bool hover, down, viaMouse;
         string subText = "";
         // a small second line under the text of the button (the install button uses it to say exactly what will be installed)
@@ -367,7 +369,7 @@ namespace OtzariaDict
                 Gfx.Frame(g, Rectangle.Inflate(r, -Dpi.S(3), -Dpi.S(3)), Style == BtnStyle.Filled ? Theme.OnPrimary : Theme.Primary, Dpi.S(2));
 
             bool big = Style == BtnStyle.Filled || (Style == BtnStyle.Outlined && !Light);
-            Font f = Theme.F(big ? 15 : 14, !Light);
+            Font f = Theme.F(Small ? 13 : (big ? 15 : 14), !Light);
             if (subText.Length == 0)
                 Gfx.TextAt(g, Text, f, fg, new Rectangle(Dpi.S(8), 0, Width - Dpi.S(16), Height), Align.Center, true, false);
             else
@@ -514,7 +516,7 @@ namespace OtzariaDict
     {
         Header header; StatusLabel chip; TextBlock secTitle, stage, status, footer; LowerPanel lower;
         OptionRow cardBasic, cardExt, cardComp;
-        FlatBtn btnInstall, btnRemove, btnManual, btnRepeat, btnAdvanced;
+        FlatBtn btnInstall, btnRemove, btnManual, btnWords, btnRepeat, btnAdvanced;
         ProgressLine prog;
         bool busy;
         bool asking;   // the "Word is open" window (or the short wait after it) is on: a second click must not start anything
@@ -593,16 +595,19 @@ namespace OtzariaDict
             btnManual = new FlatBtn { Bounds = Dpi.R(40, 16, 640, 40), Text = "התקנה ידנית (אם ההתקנה האוטומטית לא עובדת)", Style = BtnStyle.Tonal };
             btnManual.Click += delegate { StartManual(); };
 
-            btnRepeat = new FlatBtn { Bounds = Dpi.R(370, 68, 310, 38), Text = "הסר שגיאות ממילים כפולות", Style = BtnStyle.Outlined, Light = true };
+            // the second row: the person's own changes to the dictionary (3.0.0.9), repeated words, advanced removal
+            btnWords = new FlatBtn { Bounds = Dpi.R(475, 68, 205, 38), Text = "עריכת מילים", Style = BtnStyle.Tonal };
+            btnWords.Click += delegate { StartWords(); };
+            btnRepeat = new FlatBtn { Bounds = Dpi.R(257, 68, 206, 38), Text = "הסר שגיאות ממילים כפולות", Style = BtnStyle.Outlined, Light = true };
             btnRepeat.Click += delegate { StartRepeated(); };
-            btnAdvanced = new FlatBtn { Bounds = Dpi.R(40, 68, 310, 38), Text = "הסרה מתקדמת", Style = BtnStyle.Outlined, Light = true };
+            btnAdvanced = new FlatBtn { Bounds = Dpi.R(40, 68, 205, 38), Text = "הסרה מתקדמת", Style = BtnStyle.Outlined, Light = true };
             btnAdvanced.Click += delegate { StartAdvanced(); };
 
             string wv = Core.WordVersion();
             footer = new TextBlock { Bounds = Dpi.R(40, 120, 640, 18), Font = Theme.F(13, false), Color = Theme.TextQuiet, Center = true, Wrap = false,
                 Text = "גרסת התוכנה " + Core.AppVersion + "   ·   וורד שזוהה במחשב: " + (wv ?? "לא זוהה") };
 
-            lower.Controls.AddRange(new Control[] { btnManual, btnRepeat, btnAdvanced, footer });
+            lower.Controls.AddRange(new Control[] { btnManual, btnWords, btnRepeat, btnAdvanced, footer });
             // the order of the Tab key follows this order: right to left, so "install" comes before "remove"
             Controls.AddRange(new Control[] { header, secTitle, chip, cardBasic, cardExt, cardComp, btnInstall, btnRemove, prog, stage, status, lower });
             RefreshState(true);
@@ -727,7 +732,7 @@ namespace OtzariaDict
         void SetBusy(bool b)
         {
             busy = b;
-            btnInstall.Enabled = !b; btnRemove.Enabled = !b; btnManual.Enabled = !b; btnRepeat.Enabled = !b; btnAdvanced.Enabled = !b;
+            btnInstall.Enabled = !b; btnRemove.Enabled = !b; btnManual.Enabled = !b; btnWords.Enabled = !b; btnRepeat.Enabled = !b; btnAdvanced.Enabled = !b;
             UseWaitCursor = b;
         }
 
@@ -822,6 +827,51 @@ namespace OtzariaDict
             Work(delegate { return Installer.Remove(true); });
         }
 
+        // the word-editing window (Words.cs). It shows the dictionary that is installed (or, if none is, the one chosen above);
+        // after "save" the same dictionary is installed again, with the person's changes, so that Word has them.
+        void StartWords()
+        {
+            if (busy || asking) return;
+            InstalledInfo info = Core.DetectInstalled();
+            bool installed = info.Edition > 0;
+            bool ext = installed ? info.Edition == 2 : cardExt.Selected;
+            bool comp = installed ? info.Compose : cardComp.Selected;
+            WordsForm wf;
+            UseWaitCursor = true;
+            Cursor.Current = Cursors.WaitCursor;
+            try { wf = new WordsForm(ext, comp, installed, false); }
+            catch (Exception ex)
+            {
+                Core.Log("Opening the word editing failed: " + ex);
+                Say(new Result { Ok = false, Title = "עריכת מילים", Text = "לא הצלחתי לפתוח את עריכת המילים:\r\n" + Core.Msg(ex) + "\r\n\r\nקובץ יומן לשליחה: " + Core.LogPath });
+                return;
+            }
+            finally { UseWaitCursor = false; }
+            using (wf)
+            {
+                wf.ShowDialog(this);
+                if (!wf.Saved) return;
+                string head = "השינויים שלכם במילון נשמרו"
+                            + (wf.Sent ? ", וההצעה נשלחה לבעל המילון. תודה!" : wf.ViaBrowser ? ", ודף ההצעה נפתח בגיטהב." : ".");
+                if (!installed)
+                {
+                    Say(new Result { Ok = true, Title = "השינויים נשמרו", Text = head + "\r\n\r\nהם יחולו כשתתקינו את המילון." });
+                    return;
+                }
+                if (!WordIsClosedOrIgnored(true))
+                {
+                    Say(new Result { Ok = true, Title = "השינויים נשמרו", Text = head + "\r\n\r\nוורד עוד לא עודכן. כדי שהשינויים יחולו, סגרו את וורד ולחצו על \"התקן\"." });
+                    return;
+                }
+                Work(delegate
+                {
+                    Result r = Installer.Install(ext, comp, delegate (int p, string s) { UI(delegate { prog.Value = p; SetStage(s); }); }, true);
+                    r.Text = head + "\r\n\r\n" + r.Text;
+                    return r;
+                });
+            }
+        }
+
         // switch Word's "flag repeated words" off (for ALL repeated words) - or back on
         void StartRepeated()
         {
@@ -897,6 +947,15 @@ namespace OtzariaDict
             int forcedDpi = 0;
             for (int i = 0; i + 1 < args.Length; i++) if (args[i] == "--dpi") int.TryParse(args[i + 1], out forcedDpi);
             Dpi.Init(forcedDpi);
+
+            if (args.Length >= 1 && (args[0] == "--preview-words" || args[0] == "--preview-suggest"))   // for the developer: the word-editing windows, with sample changes that are never saved
+            {
+                Application.EnableVisualStyles();
+                Application.SetCompatibleTextRenderingDefault(false);
+                if (args[0] == "--preview-words") using (WordsForm f = new WordsForm(true, false, true, true)) { f.Shown += delegate { f.Demo(); }; f.ShowDialog(); }
+                else using (SuggestDialog d = new SuggestDialog(WordsForm.DemoChanges(), "מורחב")) d.ShowDialog();
+                return 0;
+            }
 
             if (args.Length >= 1 && args[0] == "--preview-wordopen")   // for the developer: look at the "Word is open" window, without Word ("remove" = the removal wording)
             {
@@ -1107,6 +1166,7 @@ namespace OtzariaDict
         static int SelfTest(string dir)
         {
             Core.UProofOverride = dir;
+            MyWords.FolderOverride = Path.Combine(dir, "settings");   // the person's own changes (stage 4): never the real ones
             Directory.CreateDirectory(dir);
             fails = 0;
             ProgressFn quiet = delegate (int p, string t) { };
@@ -1292,6 +1352,7 @@ namespace OtzariaDict
             Check(Core.DetectInstalled().Edition == 0, "nothing is recorded as installed after that failure");
 
             SelfTestReviewFixes(dir);
+            SelfTestWordEditing(dir);
 
             Console.WriteLine(fails == 0 ? "SELFTEST PASSED" : "SELFTEST FAILED (" + fails + ")");
             return fails;
@@ -1330,6 +1391,109 @@ namespace OtzariaDict
         {
             using (Microsoft.Win32.RegistryKey k = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(RegFallback.KeyPath, true))
                 if (k != null) foreach (string n in names) k.DeleteValue(n, false);
+        }
+
+        // 3.0.0.9: the person's own changes to the dictionary (add / remove / correct) and the suggestion sent to the dictionary's owner
+        static void SelfTestWordEditing(string dir)
+        {
+            ProgressFn quiet = delegate (int p, string t) { };
+            string main = Path.Combine(dir, Core.MainFile);
+            string custom = Path.Combine(dir, "CUSTOM.DIC");
+            if (Directory.Exists(MyWords.FolderOverride)) Directory.Delete(MyWords.FolderOverride, true);
+            if (File.Exists(custom)) File.Delete(custom);
+
+            Console.WriteLine("-- 3.0.0.9: what the person types is cleaned first");
+            Check(WordEdits.Clean("  מיבעיא ") == "מיבעיא", "spaces around a word are dropped");
+            Check(WordEdits.Clean("חז\"ל") == "חז\"ל" && WordEdits.Clean("ר׳") == "ר׳" && WordEdits.Clean("רמב״ם") == "רמב״ם", "gershayim and geresh stay");
+            Check(WordEdits.Clean("בְּרֵאשִׁית") == "בראשית", "vowel points are dropped");
+            Check(WordEdits.Clean("\u200Fשלום\u200E") == "שלום", "invisible direction marks are dropped");
+            Check(WordEdits.Clean("שתי מילים") == null && WordEdits.Clean("") == null && WordEdits.Clean("א<ב") == null && WordEdits.Clean(new string('א', 80)) == null,
+                  "two words, nothing, a sign or a very long one: not a word");
+
+            Console.WriteLine("-- 3.0.0.9: adding, removing, correcting, undoing");
+            List<string> edition = Core.BuildWords(false, false);
+            WordEdits e = new WordEdits(edition, new List<WordChange>());
+            int n0 = e.Count;
+            Check(n0 == edition.Count, "the list starts as the edition (" + n0 + " words)");
+            Check(e.Add("תיבהחדשה") == EditResult.Done && e.Contains("תיבהחדשה") && e.Count == n0 + 1, "a new word is added");
+            Check(e.Add("תיבהחדשה") == EditResult.AlreadyThere && e.Add("מיבעי") == EditResult.AlreadyThere, "a word that is there already: said so");
+            Check(e.Remove("מתרצינן") == EditResult.Done && !e.Contains("מתרצינן"), "a word of the dictionary is removed");
+            Check(e.Remove("מתרצינן") == EditResult.NotThere, "removing it again: it is not there");
+            Check(e.Fix("מיבעי", "מיבעיי") == EditResult.Done && !e.Contains("מיבעי") && e.Contains("מיבעיי"), "a correction: the old spelling goes, the new one comes");
+            Check(e.Fix("מיבעיי", "מיבעיי") == EditResult.Same, "a 'correction' to the same spelling: nothing to do");
+            Check(e.Changes.Count == 3 && e.Changes[0].Kind == '+' && e.Changes[1].Kind == '-' && e.Changes[2].Kind == '~', "three changes are listed, in order");
+            Check(e.Remove("תיבהחדשה") == EditResult.Done && e.Changes.Count == 2 && !e.Contains("תיבהחדשה"), "removing a word of one's own takes back its addition");
+            Check(e.Add("מתרצינן") == EditResult.Done && e.Changes.Count == 1 && e.Contains("מתרצינן"), "adding back a removed word takes back its removal");
+            e.Undo(0);
+            Check(e.Changes.Count == 0 && e.Contains("מיבעי") && !e.Contains("מיבעיי") && e.Count == n0, "undoing the correction: the dictionary is as it was");
+            List<string> sorted = e.Sorted();
+            bool inOrder = sorted.Count == n0;
+            for (int i = 1; i < sorted.Count && inOrder; i++) if (string.CompareOrdinal(sorted[i - 1], sorted[i]) >= 0) inOrder = false;
+            Check(inOrder, "the list of all the words is sorted, without repeats");
+            e.Add("תיבהחדשה");
+            Check(e.Sorted().Contains("תיבהחדשה") && e.Find("יבהחדש").Count >= 1, "the list and the search follow the changes");
+
+            Console.WriteLine("-- 3.0.0.9: the changes are kept in a file, and every installation applies them");
+            List<WordChange> mine = new List<WordChange>();
+            mine.Add(new WordChange('+', "תיבהחדשה", null));
+            mine.Add(new WordChange('-', "מתרצינן", null));
+            mine.Add(new WordChange('~', "מיבעי", "מיבעיי"));
+            mine[0].Sent = true;
+            MyWords.Save(mine);
+            List<WordChange> back = MyWords.Load();
+            Check(back.Count == 3 && back[0].Sent && !back[1].Sent && back[2].Kind == '~' && back[2].Word == "מיבעי" && back[2].NewWord == "מיבעיי", "saved and read back, also what was already sent");
+            Installer.Install(false, false, quiet, false);
+            List<string> inFile = Core.ReadDicWords(main);
+            Check(inFile.Contains("תיבהחדשה") && inFile.Contains("מיבעיי") && !inFile.Contains("מתרצינן") && !inFile.Contains("מיבעי"), "the installed file has the person's changes");
+            Check(inFile.Count == edition.Count, "and nothing else (" + inFile.Count + " words: 2 added, 2 gone)");
+
+            List<string> withWordsOwn = Core.ReadDicWords(main);
+            withWordsOwn.Add("מילהשוורדהוסיף");   // a word that Word itself put into our file ("Add to Dictionary")
+            Core.WriteDic(main, withWordsOwn);
+            mine.RemoveAt(0);                     // the person takes back an addition
+            MyWords.Save(mine);
+            Installer.Install(false, false, quiet, false);
+            inFile = Core.ReadDicWords(main);
+            Check(!inFile.Contains("תיבהחדשה") && inFile.Contains("מילהשוורדהוסיף"), "an addition taken back goes; a word that Word added by itself stays");
+
+            FakeApp hidden = new FakeApp();
+            FakeApp fresh = new FakeApp(); fresh.InEffect = true;
+            fresh.Known = new HashSet<string>(MyWords.Apply(Core.BuildWords(false, false), MyWords.Load()));
+            Result r = InstallWithFakeWord(hidden, false, fresh);
+            Check(r.Ok && r.Text.Contains("מזוהות ✓"), "the check after installing uses only words of the person's dictionary (" + r.Title + ")");
+
+            Installer.Remove(false);
+            List<string> saved = File.Exists(custom) ? Core.ReadDicWords(custom) : new List<string>();
+            Check(MyWords.Load().Count == 2 && saved.Contains("מילהשוורדהוסיף") && !saved.Contains("מיבעיי"),
+                  "removing the dictionary keeps the person's list; only words that Word added go to CUSTOM.DIC");
+            if (File.Exists(custom)) File.Delete(custom);
+            if (File.Exists(custom + ".bak")) File.Delete(custom + ".bak");
+            MyWords.Save(new List<WordChange>());
+            Check(MyWords.Load().Count == 0, "an empty list is saved as empty");
+            File.WriteAllText(Path.Combine(MyWords.Folder(), MyWords.FileName),
+                "# by hand\r\n+שתי מילים\r\n~מיבעי\r\n-<x>\r\n+  תיבהחדשה \tsent\r\n~מיבעי\tמיבעי\r\n", System.Text.Encoding.UTF8);
+            List<WordChange> byHand = MyWords.Load();
+            Check(byHand.Count == 1 && byHand[0].Word == "תיבהחדשה" && byHand[0].Sent, "a list changed by hand: only real words are read (" + byHand.Count + ")");
+            MyWords.Save(new List<WordChange>());
+
+            Console.WriteLine("-- 3.0.0.9: the suggestion that goes to the dictionary's owner");
+            List<WordChange> s = new List<WordChange>();
+            s.Add(new WordChange('+', "ומתרצינן", null));
+            s.Add(new WordChange('-', "בראשיתת", null));
+            s.Add(new WordChange('~', "חזל", "חז\"ל"));
+            string title = Suggest.Title(s);
+            string body = Suggest.Body(s, "ברכות דף ב", "מורחב");
+            Check(title.Contains("1 להוסיף") && title.Contains("1 להסיר") && title.Contains("1 לתקן"), "the title counts the changes");
+            Check(body.Contains("ומתרצינן") && body.Contains("בראשיתת") && body.Contains("חזל ← חז\"ל") && body.Contains("ברכות דף ב") && body.Contains(Core.AppVersion) && body.Contains("מורחב"),
+                  "the text has every change, the note, the version and the edition");
+            Check(Suggest.Json("t", "a \"b\" \\ c\nd") == "{\"title\":\"t\",\"body\":\"a \\\"b\\\" \\\\ c\\nd\"}", "JSON: quotes, backslash and new line are escaped");
+            string url = Suggest.BrowserUrl(title, body);
+            Check(url.StartsWith("https://github.com/elicohen8565-hue/milon-torani-3.0/issues/new?title=") && url.Contains("&body=") && url.IndexOf(' ') < 0, "the page to open in the browser");
+            Check(Suggest.BrowserUrl(title, new string('א', 20000)).Length <= 8000, "a very long suggestion still fits the address of the page");
+            byte[] hiddenKey = Suggest.Encode("github_pat_TEST_123");
+            Check(Suggest.Decode(hiddenKey) == "github_pat_TEST_123" && System.Text.Encoding.UTF8.GetString(hiddenKey).IndexOf("github_pat") < 0, "the key is kept hidden inside the program, and read back");
+            string tk = Suggest.Token();
+            Check(tk == null || (tk.Length > 20 && tk.IndexOf(' ') < 0), "the key inside this program (" + (tk == null ? "none" : "there") + ") reads back whole");
         }
 
         // 3.0.0.8: the findings of the code review (3-11-2026), each one first shown failing on 3.0.0.7
