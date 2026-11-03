@@ -4,9 +4,11 @@ using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.IO.Compression;
+using System.Net;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading;
 using Microsoft.Win32;
 
@@ -299,15 +301,18 @@ namespace OtzariaDict
         // an update keeps them in the new file, a removal moves them to CUSTOM.DIC - they are never deleted with our file.
         // "Ours" = every word of every edition. A version that drops words from the word lists must add the dropped ones to Retired,
         // otherwise they would be kept as if the person had added them.
+        // alsoOurs = the words that the person added in the program's own editing window (MyWords): they are written by every
+        // installation from the person's list, so in the file they are not "added by Word" - one taken back must go, not be kept.
         public static readonly string[] Retired = new string[0];
 
-        public static List<string> ForeignWords(string path)
+        public static List<string> ForeignWords(string path, HashSet<string> alsoOurs = null)
         {
             List<string> found = new List<string>();
             if (!File.Exists(path)) return found;
             List<string> inFile = ReadDicWords(path);
             HashSet<string> ours = new HashSet<string>(BuildWords(true, true), StringComparer.Ordinal);
             foreach (string w in Retired) ours.Add(w);
+            if (alsoOurs != null) foreach (string w in alsoOurs) ours.Add(w);
             HashSet<string> seen = new HashSet<string>(StringComparer.Ordinal);
             foreach (string w in inFile) if (!ours.Contains(w) && seen.Add(w)) found.Add(w);
             return found;
@@ -1066,16 +1071,18 @@ namespace OtzariaDict
             string mainPath = Path.Combine(dir, Core.MainFile);
             string tmpPath = mainPath + ".tmp";
 
-            // the word list is prepared in the background while Word starts (starting Word is the slow part), and so are the words
-            // the person may have added into our file through Word: they are kept (Core.ForeignWords)
+            // the word list is prepared in the background while Word starts (starting Word is the slow part): the edition with the
+            // person's own changes (MyWords), and the words the person may have added into our file through Word: they are kept (Core.ForeignWords)
             List<string> words = null, theirs = null;
+            List<WordChange> mine = null;
             Exception buildError = null;
             Thread builder = new Thread(delegate ()
             {
                 try
                 {
                     words = Core.BuildWords(extended, compose);
-                    try { theirs = Core.ForeignWords(mainPath); }
+                    HashSet<string> alsoOurs = MyChanges(ref words, out mine);
+                    try { theirs = Core.ForeignWords(mainPath, alsoOurs); }
                     catch (Exception ex) { theirs = new List<string>(); Core.Log("Reading the old dictionary file failed: " + Core.Msg(ex)); }
                 }
                 catch (Exception ex) { buildError = ex; }
@@ -1166,6 +1173,7 @@ namespace OtzariaDict
                     return WriteFailed(res, writeError);
                 }
                 TryDelete(tmpPath);
+                if (mine != null) MyWords.SaveApplied(MyWords.Additions(mine));   // what of the person's is in the file now
                 foreach (string f in Core.LegacyFiles)   // files of older versions (several files)
                 {
                     string p = Path.Combine(dir, f);
@@ -1310,6 +1318,31 @@ namespace OtzariaDict
 
         // The text after a dictionary was registered in Word. res.WordWasOpen = Word was already running: the check was not made,
         // and the dictionary will be known to that Word only after it is closed and opened again - never a "does not recognize".
+        // the person's changes applied to the words of the edition; returns the person's own words that may be in our file from before
+        // (null = the person's list could not be read: then the edition is installed as it is, and nothing in the old file is lost)
+        static HashSet<string> MyChanges(ref List<string> words, out List<WordChange> mine)
+        {
+            mine = null;
+            try
+            {
+                List<WordChange> list = MyWords.Load();
+                HashSet<string> alsoOurs = MyWords.LoadApplied();
+                foreach (string w in MyWords.Additions(list)) alsoOurs.Add(w);
+                if (list.Count > 0)
+                {
+                    words = MyWords.Apply(words, list);
+                    Core.Log("The person's own changes: " + list.Count + " (now " + words.Count + " words)");
+                }
+                mine = list;
+                return alsoOurs;
+            }
+            catch (Exception ex)
+            {
+                Core.Log("Reading the person's own changes failed: " + Core.Msg(ex) + " - the edition is installed as it is");
+                return null;
+            }
+        }
+
         internal static void Describe(Result res, string name, string countText, string check, int verdict)
         {
             string head = "המילון " + name + " (" + countText + " מילים, בקובץ אחד) נוסף לוורד, גרסה " + Core.AppVersion + ".\r\n\r\n";
@@ -1343,7 +1376,10 @@ namespace OtzariaDict
             List<string> theirs = new List<string>();
             string customPath = null;
             bool keepMain = false;
-            try { theirs = Core.ForeignWords(mainPath); }
+            HashSet<string> alsoOurs = MyWords.LoadApplied();   // the person's own words stay in the person's list (MyWords) for the next installation
+            try { foreach (string w in MyWords.Additions(MyWords.Load())) alsoOurs.Add(w); }
+            catch (Exception ex) { Core.Log("Reading the person's own changes failed: " + Core.Msg(ex)); }
+            try { theirs = Core.ForeignWords(mainPath, alsoOurs); }
             catch (Exception ex) { Core.Log("Reading our dictionary file failed: " + Core.Msg(ex)); }
             if (theirs.Count > 0)
             {
@@ -1394,7 +1430,7 @@ namespace OtzariaDict
                 try { Core.DeleteFile(p); deleted++; }
                 catch (Exception ex) { stuck.Add(f); Core.Log("Delete failed " + f + ": " + Core.Msg(ex)); }
             }
-            if (stuck.Count == 0) Stamp.Clear();   // otherwise the window goes on showing what is still on the computer
+            if (stuck.Count == 0) { Stamp.Clear(); MyWords.SaveApplied(null); }   // otherwise the window goes on showing what is still on the computer
 
             if (stuck.Count > 0)
             {
@@ -1568,11 +1604,20 @@ namespace OtzariaDict
             Directory.CreateDirectory(dir);
             string mainPath = Path.Combine(dir, Core.MainFile);
             List<string> words = Core.BuildWords(extended, compose);
+            List<WordChange> mine;
+            HashSet<string> alsoOurs = MyChanges(ref words, out mine);
             List<string> theirs = new List<string>();
-            try { theirs = Core.ForeignWords(mainPath); }
+            try { theirs = Core.ForeignWords(mainPath, alsoOurs); }
             catch (Exception ex) { Core.Log("Reading the old dictionary file failed: " + Core.Msg(ex)); }
-            if (theirs.Count > 0) { words.AddRange(theirs); Core.Log("Manual: kept " + theirs.Count + " word(s) the person had added"); }
-            Core.WriteDic(mainPath, words);
+            List<string> toWrite = words;
+            if (theirs.Count > 0)
+            {
+                toWrite = new List<string>(words);
+                toWrite.AddRange(theirs);
+                Core.Log("Manual: kept " + theirs.Count + " word(s) the person had added");
+            }
+            Core.WriteDic(mainPath, toWrite);
+            if (mine != null) MyWords.SaveApplied(MyWords.Additions(mine));
             foreach (string f in Core.LegacyFiles)
             {
                 string p = Path.Combine(dir, f);
@@ -1678,6 +1723,474 @@ namespace OtzariaDict
             t.Append("\r\nמילונים בוורד: " + dicts);
             Core.Log(t.ToString());
             return t.ToString();
+        }
+    }
+
+    // ================================================================ stage 4: the person's own changes, and suggestions to the dictionary's owner
+
+    // One change the person made: '+' = a word added, '-' = a word of the dictionary removed,
+    // '~' = a word of the dictionary corrected (Word = the wrong spelling, NewWord = the right one: the wrong one goes, the right one comes).
+    public class WordChange
+    {
+        public char Kind;
+        public string Word;
+        public string NewWord;
+        public bool Sent;   // already sent as a suggestion to the dictionary's owner
+        public WordChange(char kind, string word, string newWord) { Kind = kind; Word = word; NewWord = newWord; }
+        public WordChange Copy() { WordChange c = new WordChange(Kind, Word, NewWord); c.Sent = Sent; return c; }
+    }
+
+    public enum EditResult { Done, Invalid, AlreadyThere, NotThere, Same }
+
+    // The person's changes stay on this computer, outside Word's folder, and every installation (also of a new version) applies them:
+    //   %APPDATA%\TorahDictionaryForWord\my-words.txt   one change per line: "+word", "-word", "~wrong<TAB>right"; "<TAB>sent" at the end = sent
+    //   %APPDATA%\TorahDictionaryForWord\applied.txt    the person's words that the last installation wrote into our file
+    //                                                   (so that one taken back later is not kept as a word that Word added by itself)
+    public static class MyWords
+    {
+        public static string FolderOverride;   // the self-test
+        public const string FileName = "my-words.txt";
+        const string AppliedName = "applied.txt";
+
+        public static string Folder()
+        {
+            if (FolderOverride != null) return FolderOverride;
+            return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "TorahDictionaryForWord");
+        }
+
+        public static List<WordChange> Load()
+        {
+            List<WordChange> list = new List<WordChange>();
+            string p = Path.Combine(Folder(), FileName);
+            if (!File.Exists(p)) return list;
+            foreach (string raw in File.ReadAllLines(p, Encoding.UTF8))
+            {
+                string line = raw.TrimEnd('\r');
+                if (line.Length < 2 || line[0] == '#') continue;
+                char kind = line[0];
+                if (kind != '+' && kind != '-' && kind != '~') continue;
+                string[] parts = line.Substring(1).Split(new char[] { '\t' });
+                WordChange c = new WordChange(kind, parts[0], null);
+                int next = 1;
+                if (kind == '~')
+                {
+                    if (parts.Length < 2 || parts[1].Length == 0) continue;
+                    c.NewWord = parts[1];
+                    next = 2;
+                }
+                c.Sent = parts.Length > next && parts[next] == "sent";
+                if (c.Word.Length > 0) list.Add(c);
+            }
+            return list;
+        }
+
+        public static void Save(List<WordChange> changes)
+        {
+            string dir = Folder();
+            Directory.CreateDirectory(dir);
+            StringBuilder sb = new StringBuilder();
+            sb.Append("# המילון התורני 3.0 – השינויים שלכם במילון (+ הוספה, - הסרה, ~ תיקון). התוכנה כותבת את הקובץ הזה.\r\n");
+            foreach (WordChange c in changes)
+            {
+                sb.Append(c.Kind).Append(c.Word);
+                if (c.Kind == '~') sb.Append('\t').Append(c.NewWord);
+                if (c.Sent) sb.Append("\tsent");
+                sb.Append("\r\n");
+            }
+            string p = Path.Combine(dir, FileName), tmp = p + ".tmp";
+            File.WriteAllText(tmp, sb.ToString(), new UTF8Encoding(true));   // written whole next to it first, then copied over
+            File.Copy(tmp, p, true);
+            File.Delete(tmp);
+        }
+
+        // the edition as the person has it: removed and corrected words out, the person's words in (at the end, no repeats)
+        public static List<string> Apply(List<string> words, List<WordChange> changes)
+        {
+            if (changes == null || changes.Count == 0) return words;
+            HashSet<string> drop = new HashSet<string>(StringComparer.Ordinal);
+            List<string> add = new List<string>();
+            foreach (WordChange c in changes)
+            {
+                if (c.Kind == '-') drop.Add(c.Word);
+                else if (c.Kind == '~') { drop.Add(c.Word); add.Add(c.NewWord); }
+                else if (c.Kind == '+') add.Add(c.Word);
+            }
+            List<string> result = new List<string>(words.Count + add.Count);
+            HashSet<string> seen = new HashSet<string>(StringComparer.Ordinal);
+            foreach (string w in words) if (!drop.Contains(w) && seen.Add(w)) result.Add(w);
+            foreach (string w in add) if (seen.Add(w)) result.Add(w);
+            return result;
+        }
+
+        // the person's own words: added ones, and the right spelling of a correction
+        public static List<string> Additions(List<WordChange> changes)
+        {
+            List<string> a = new List<string>();
+            foreach (WordChange c in changes)
+            {
+                if (c.Kind == '+') a.Add(c.Word);
+                else if (c.Kind == '~') a.Add(c.NewWord);
+            }
+            return a;
+        }
+
+        public static HashSet<string> LoadApplied()
+        {
+            HashSet<string> s = new HashSet<string>(StringComparer.Ordinal);
+            try
+            {
+                string p = Path.Combine(Folder(), AppliedName);
+                if (File.Exists(p))
+                    foreach (string l in File.ReadAllLines(p, Encoding.UTF8)) { string w = l.Trim(); if (w.Length > 0) s.Add(w); }
+            }
+            catch (Exception ex) { Core.Log("Reading the list of applied words failed: " + Core.Msg(ex)); }
+            return s;
+        }
+
+        public static void SaveApplied(List<string> words)
+        {
+            try
+            {
+                string dir = Folder(), p = Path.Combine(dir, AppliedName);
+                if (words == null || words.Count == 0) { if (File.Exists(p)) File.Delete(p); return; }
+                Directory.CreateDirectory(dir);
+                File.WriteAllLines(p, words.ToArray(), new UTF8Encoding(false));
+            }
+            catch (Exception ex) { Core.Log("Saving the list of applied words failed: " + Core.Msg(ex)); }
+        }
+    }
+
+    // The changes made in the editing window, on top of an edition: knows the dictionary as it is with them, sorted for the list.
+    public class WordEdits
+    {
+        public readonly List<WordChange> Changes = new List<WordChange>();
+        readonly List<string> edition;
+        readonly HashSet<string> inEdition;
+        HashSet<string> current;
+        List<string> sorted;
+
+        public WordEdits(List<string> editionWords, List<WordChange> changes)
+        {
+            edition = editionWords;
+            inEdition = new HashSet<string>(editionWords, StringComparer.Ordinal);
+            if (changes != null) foreach (WordChange c in changes) Changes.Add(c.Copy());
+            Rebuild();
+        }
+
+        void Rebuild()
+        {
+            current = new HashSet<string>(MyWords.Apply(edition, Changes), StringComparer.Ordinal);
+            sorted = new List<string>(current);
+            sorted.Sort(StringComparer.Ordinal);
+        }
+
+        public int Count { get { return current.Count; } }
+        public bool Contains(string w) { return w != null && current.Contains(w); }
+        public List<string> Sorted() { return sorted; }
+
+        // every word that has this text in it (vowel points and invisible marks are not counted); empty text = all the words
+        public List<string> Find(string text)
+        {
+            string q = Strip(text ?? "").Trim();
+            if (q.Length == 0) return sorted;
+            List<string> found = new List<string>();
+            foreach (string w in sorted) if (w.IndexOf(q, StringComparison.Ordinal) >= 0) found.Add(w);
+            return found;
+        }
+
+        void Put(string w)
+        {
+            if (!current.Add(w)) return;
+            int i = sorted.BinarySearch(w, StringComparer.Ordinal);
+            if (i < 0) sorted.Insert(~i, w);
+        }
+
+        void Take(string w)
+        {
+            if (!current.Remove(w)) return;
+            int i = sorted.BinarySearch(w, StringComparer.Ordinal);
+            if (i >= 0) sorted.RemoveAt(i);
+        }
+
+        // would the word be in the dictionary with the changes as they are now (the same rule as MyWords.Apply: an addition wins)
+        bool Present(string w)
+        {
+            bool p = inEdition.Contains(w);
+            foreach (WordChange c in Changes) if ((c.Kind == '-' || c.Kind == '~') && c.Word == w) p = false;
+            foreach (WordChange c in Changes) if ((c.Kind == '+' && c.Word == w) || (c.Kind == '~' && c.NewWord == w)) p = true;
+            return p;
+        }
+
+        public EditResult Add(string raw)
+        {
+            string w = Clean(raw);
+            if (w == null) return EditResult.Invalid;
+            if (current.Contains(w)) return EditResult.AlreadyThere;
+            for (int i = Changes.Count - 1; i >= 0; i--)
+                if (Changes[i].Kind == '-' && Changes[i].Word == w) Changes.RemoveAt(i);   // it was removed by the person: the removal is taken back
+            if (!Present(w)) Changes.Add(new WordChange('+', w, null));
+            Put(w);
+            return EditResult.Done;
+        }
+
+        public EditResult Remove(string raw)
+        {
+            string w = Clean(raw);
+            if (w == null) return EditResult.Invalid;
+            if (!current.Contains(w)) return EditResult.NotThere;
+            for (int i = Changes.Count - 1; i >= 0; i--)
+            {
+                WordChange c = Changes[i];
+                if (c.Kind == '+' && c.Word == w) Changes.RemoveAt(i);                                  // the person's own word: its addition is taken back
+                else if (c.Kind == '~' && c.NewWord == w) Changes[i] = new WordChange('-', c.Word, null); // the right spelling of a correction: only the removal stays
+            }
+            if (Present(w)) Changes.Add(new WordChange('-', w, null));   // a word of the edition
+            Take(w);
+            return EditResult.Done;
+        }
+
+        public EditResult Fix(string wrongRaw, string rightRaw)
+        {
+            string a = Clean(wrongRaw), b = Clean(rightRaw);
+            if (a == null || b == null) return EditResult.Invalid;
+            if (a == b) return EditResult.Same;
+            if (!current.Contains(a)) return EditResult.NotThere;
+            int own = -1, fixOfFix = -1;
+            for (int i = 0; i < Changes.Count; i++)
+            {
+                if (Changes[i].Kind == '+' && Changes[i].Word == a) own = i;
+                if (Changes[i].Kind == '~' && Changes[i].NewWord == a) fixOfFix = i;
+            }
+            if (own >= 0) { Changes.RemoveAt(own); if (!Present(b)) Changes.Add(new WordChange('+', b, null)); }   // the person's own word, spelled again
+            else if (fixOfFix >= 0) Changes[fixOfFix] = new WordChange('~', Changes[fixOfFix].Word, b);            // a correction corrected again
+            else Changes.Add(new WordChange('~', a, b));
+            if (Present(a)) Changes.Add(new WordChange('-', a, null));
+            if (!Present(b)) Changes.Add(new WordChange('+', b, null));
+            Take(a);
+            Put(b);
+            return EditResult.Done;
+        }
+
+        public void Undo(int index)
+        {
+            if (index < 0 || index >= Changes.Count) return;
+            Changes.RemoveAt(index);
+            Rebuild();
+        }
+
+        static string Strip(string raw)
+        {
+            StringBuilder sb = new StringBuilder(raw.Length);
+            foreach (char ch in raw)
+            {
+                if (ch >= '֑' && ch <= 'ׇ' && ch != '־') continue;   // vowel points and cantillation marks (the maqaf stays)
+                if (ch == '​' || ch == '‌' || ch == '‍' || ch == '‎' || ch == '‏' || (ch >= '‪' && ch <= '‮') || ch == '﻿') continue;   // invisible marks
+                sb.Append(ch);
+            }
+            return sb.ToString();
+        }
+
+        // one word as the person typed it, cleaned (no spaces around it, no vowel points, no invisible marks);
+        // null = not one word: empty, a space inside, a sign that does not belong in a word, or longer than 60 letters
+        public static string Clean(string raw)
+        {
+            if (raw == null) return null;
+            string w = Strip(raw).Trim();
+            if (w.Length == 0 || w.Length > 60) return null;
+            foreach (char ch in w)
+            {
+                bool ok = (ch >= 'א' && ch <= 'ת')                                // Hebrew letters
+                       || ch == '׳' || ch == '״' || ch == '־'                 // geresh, gershayim, maqaf
+                       || ch == '"' || ch == '\'' || ch == '-'
+                       || (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9');
+                if (!ok) return null;
+            }
+            return w;
+        }
+    }
+
+    // A suggestion to the dictionary's owner = a new issue in the GitHub repository of the program. Sent by the program itself, with a key
+    // built into it that may only open issues in that one repository; or (a person with a GitHub account, or when sending fails) through the
+    // "new issue" page of GitHub in the browser, already filled in.
+    public static class Suggest
+    {
+        public const string Repo = "elicohen8565-hue/milon-torani-3.0";
+        const string KeyResource = "Milon.issue.bin";
+        static readonly byte[] Mask = Encoding.ASCII.GetBytes("milon-torani-3.0/issues");
+
+        static int Count(List<WordChange> ch, char kind)
+        {
+            int n = 0;
+            foreach (WordChange c in ch) if (c.Kind == kind) n++;
+            return n;
+        }
+
+        public static string Title(List<WordChange> ch)
+        {
+            List<string> parts = new List<string>();
+            int a = Count(ch, '+'), r = Count(ch, '-'), f = Count(ch, '~');
+            if (a > 0) parts.Add(a + " להוסיף");
+            if (r > 0) parts.Add(r + " להסיר");
+            if (f > 0) parts.Add(f + " לתקן");
+            return "הצעה למילון: " + string.Join(", ", parts.ToArray());
+        }
+
+        // the free text of a person goes into a public page: no HTML, no "@" (it would call people), one line, not too long
+        static string SafeNote(string note)
+        {
+            if (note == null) return "";
+            StringBuilder sb = new StringBuilder();
+            foreach (char ch in note)
+            {
+                if (ch == '<' || ch == '>') continue;
+                if (ch == '@') { sb.Append('＠'); continue; }
+                sb.Append(ch < ' ' ? ' ' : ch);
+            }
+            string s = sb.ToString().Trim();
+            return s.Length > 500 ? s.Substring(0, 500) + "…" : s;
+        }
+
+        public static string Body(List<WordChange> ch, string note, string edition)
+        {
+            StringBuilder sb = new StringBuilder();
+            sb.Append("<div dir=\"rtl\">\n\n");
+            sb.Append("**הצעה לשיפור המילון**, נשלחה מתוך התוכנה (גרסה " + Core.AppVersion + (string.IsNullOrEmpty(edition) ? "" : ", מילון: " + edition) + ").\n\n");
+            Section(sb, ch, '+', "להוסיף");
+            Section(sb, ch, '-', "להסיר");
+            Section(sb, ch, '~', "לתקן איות");
+            string n = SafeNote(note);
+            if (n.Length > 0) sb.Append("**הערה:** " + n + "\n\n");
+            sb.Append("</div>\n");
+            return sb.ToString();
+        }
+
+        static void Section(StringBuilder sb, List<WordChange> ch, char kind, string head)
+        {
+            int n = Count(ch, kind);
+            if (n == 0) return;
+            sb.Append("### " + head + " (" + n + ")\n");
+            foreach (WordChange c in ch)
+                if (c.Kind == kind) sb.Append("- " + (kind == '~' ? c.Word + " ← " + c.NewWord : c.Word) + "\n");
+            sb.Append("\n");
+        }
+
+        public static string Json(string title, string body)
+        {
+            return "{\"title\":\"" + JsonEscape(title) + "\",\"body\":\"" + JsonEscape(body) + "\"}";
+        }
+
+        public static string JsonEscape(string s)
+        {
+            StringBuilder sb = new StringBuilder(s.Length + 16);
+            foreach (char c in s)
+            {
+                switch (c)
+                {
+                    case '"': sb.Append("\\\""); break;
+                    case '\\': sb.Append("\\\\"); break;
+                    case '\n': sb.Append("\\n"); break;
+                    case '\r': sb.Append("\\r"); break;
+                    case '\t': sb.Append("\\t"); break;
+                    default:
+                        if (c < ' ') sb.Append("\\u" + ((int)c).ToString("x4", CultureInfo.InvariantCulture));
+                        else sb.Append(c);
+                        break;
+                }
+            }
+            return sb.ToString();
+        }
+
+        // the "new issue" page of GitHub, already filled in; a long suggestion is shortened so that the address stays under 8,000 characters
+        public static string BrowserUrl(string title, string body)
+        {
+            string head = "https://github.com/" + Repo + "/issues/new?title=" + Uri.EscapeDataString(title) + "&body=";
+            string url = head + Uri.EscapeDataString(body);
+            int keep = body.Length;
+            while (url.Length > 8000 && keep > 0)
+            {
+                keep = keep * 3 / 4;
+                url = head + Uri.EscapeDataString(body.Substring(0, keep) + "\n\n(…הרשימה קוצרה)");
+            }
+            return url;
+        }
+
+        // the key is kept in the program a little hidden (not as plain text); the build writes it the same way (scripts/build_all.sh)
+        public static byte[] Encode(string token)
+        {
+            byte[] b = Encoding.UTF8.GetBytes(token);
+            for (int i = 0; i < b.Length; i++) b[i] = (byte)(b[i] ^ Mask[i % Mask.Length] ^ (byte)(i * 31 + 7));
+            return b;
+        }
+
+        public static string Decode(byte[] data)
+        {
+            byte[] b = new byte[data.Length];
+            for (int i = 0; i < data.Length; i++) b[i] = (byte)(data[i] ^ Mask[i % Mask.Length] ^ (byte)(i * 31 + 7));
+            return Encoding.UTF8.GetString(b);
+        }
+
+        // null = this program was built without a key (then a suggestion goes through the browser)
+        public static string Token()
+        {
+            try
+            {
+                using (Stream s = Assembly.GetExecutingAssembly().GetManifestResourceStream(KeyResource))
+                {
+                    if (s == null) return null;
+                    using (MemoryStream ms = new MemoryStream())
+                    {
+                        s.CopyTo(ms);
+                        string t = Decode(ms.ToArray()).Trim();
+                        return t.Length > 0 ? t : null;
+                    }
+                }
+            }
+            catch (Exception) { return null; }
+        }
+
+        // sends the suggestion as a new issue. true = sent (its number and address); false = not sent (error says why)
+        public static bool Send(string title, string body, out int number, out string address, out string error)
+        {
+            number = 0; address = null; error = null;
+            string token = Token();
+            if (token == null) { error = "התוכנה נבנתה בלי מפתח לשליחה"; return false; }
+            try
+            {
+                ServicePointManager.SecurityProtocol |= SecurityProtocolType.Tls12;   // GitHub takes only TLS 1.2 and newer; .NET 4.5 does not turn it on by itself
+                HttpWebRequest req = (HttpWebRequest)WebRequest.Create("https://api.github.com/repos/" + Repo + "/issues");
+                req.Method = "POST";
+                req.UserAgent = "milon-torani/" + Core.AppVersion;
+                req.Accept = "application/vnd.github+json";
+                req.ContentType = "application/json; charset=utf-8";
+                req.Headers["Authorization"] = "Bearer " + token;
+                req.Headers["X-GitHub-Api-Version"] = "2022-11-28";
+                req.Timeout = 30000;
+                byte[] data = new UTF8Encoding(false).GetBytes(Json(title, body));
+                req.ContentLength = data.Length;
+                using (Stream s = req.GetRequestStream()) s.Write(data, 0, data.Length);
+                string text;
+                using (HttpWebResponse resp = (HttpWebResponse)req.GetResponse())
+                using (StreamReader r = new StreamReader(resp.GetResponseStream(), Encoding.UTF8)) text = r.ReadToEnd();
+                Match m = Regex.Match(text, "\"number\"\\s*:\\s*(\\d+)");
+                if (m.Success) number = int.Parse(m.Groups[1].Value, CultureInfo.InvariantCulture);
+                Match u = Regex.Match(text, "\"html_url\"\\s*:\\s*\"(https://github\\.com/[^\"]+/issues/\\d+)\"");
+                if (u.Success) address = u.Groups[1].Value;
+                Core.Log("Suggestion sent: issue #" + number);
+                return true;
+            }
+            catch (WebException ex)
+            {
+                HttpWebResponse resp = ex.Response as HttpWebResponse;
+                error = resp != null ? "GitHub: " + (int)resp.StatusCode + " " + resp.StatusDescription : Core.Msg(ex);
+                Core.Log("Sending the suggestion failed: " + error);
+                return false;
+            }
+            catch (Exception ex)
+            {
+                error = Core.Msg(ex);
+                Core.Log("Sending the suggestion failed: " + error);
+                return false;
+            }
         }
     }
 }

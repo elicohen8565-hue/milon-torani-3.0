@@ -1107,6 +1107,7 @@ namespace OtzariaDict
         static int SelfTest(string dir)
         {
             Core.UProofOverride = dir;
+            MyWords.FolderOverride = Path.Combine(dir, "settings");   // the person's own changes (stage 4): never the real ones
             Directory.CreateDirectory(dir);
             fails = 0;
             ProgressFn quiet = delegate (int p, string t) { };
@@ -1292,6 +1293,7 @@ namespace OtzariaDict
             Check(Core.DetectInstalled().Edition == 0, "nothing is recorded as installed after that failure");
 
             SelfTestReviewFixes(dir);
+            SelfTestWordEditing(dir);
 
             Console.WriteLine(fails == 0 ? "SELFTEST PASSED" : "SELFTEST FAILED (" + fails + ")");
             return fails;
@@ -1330,6 +1332,104 @@ namespace OtzariaDict
         {
             using (Microsoft.Win32.RegistryKey k = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(RegFallback.KeyPath, true))
                 if (k != null) foreach (string n in names) k.DeleteValue(n, false);
+        }
+
+        // 3.0.0.9: the person's own changes to the dictionary (add / remove / correct) and the suggestion sent to the dictionary's owner
+        static void SelfTestWordEditing(string dir)
+        {
+            ProgressFn quiet = delegate (int p, string t) { };
+            string main = Path.Combine(dir, Core.MainFile);
+            string custom = Path.Combine(dir, "CUSTOM.DIC");
+            if (Directory.Exists(MyWords.FolderOverride)) Directory.Delete(MyWords.FolderOverride, true);
+            if (File.Exists(custom)) File.Delete(custom);
+
+            Console.WriteLine("-- 3.0.0.9: what the person types is cleaned first");
+            Check(WordEdits.Clean("  מיבעיא ") == "מיבעיא", "spaces around a word are dropped");
+            Check(WordEdits.Clean("חז\"ל") == "חז\"ל" && WordEdits.Clean("ר׳") == "ר׳" && WordEdits.Clean("רמב״ם") == "רמב״ם", "gershayim and geresh stay");
+            Check(WordEdits.Clean("בְּרֵאשִׁית") == "בראשית", "vowel points are dropped");
+            Check(WordEdits.Clean("\u200Fשלום\u200E") == "שלום", "invisible direction marks are dropped");
+            Check(WordEdits.Clean("שתי מילים") == null && WordEdits.Clean("") == null && WordEdits.Clean("א<ב") == null && WordEdits.Clean(new string('א', 80)) == null,
+                  "two words, nothing, a sign or a very long one: not a word");
+
+            Console.WriteLine("-- 3.0.0.9: adding, removing, correcting, undoing");
+            List<string> edition = Core.BuildWords(false, false);
+            WordEdits e = new WordEdits(edition, new List<WordChange>());
+            int n0 = e.Count;
+            Check(n0 == edition.Count, "the list starts as the edition (" + n0 + " words)");
+            Check(e.Add("תיבהחדשה") == EditResult.Done && e.Contains("תיבהחדשה") && e.Count == n0 + 1, "a new word is added");
+            Check(e.Add("תיבהחדשה") == EditResult.AlreadyThere && e.Add("מיבעי") == EditResult.AlreadyThere, "a word that is there already: said so");
+            Check(e.Remove("מתרצינן") == EditResult.Done && !e.Contains("מתרצינן"), "a word of the dictionary is removed");
+            Check(e.Remove("מתרצינן") == EditResult.NotThere, "removing it again: it is not there");
+            Check(e.Fix("מיבעי", "מיבעיי") == EditResult.Done && !e.Contains("מיבעי") && e.Contains("מיבעיי"), "a correction: the old spelling goes, the new one comes");
+            Check(e.Fix("מיבעיי", "מיבעיי") == EditResult.Same, "a 'correction' to the same spelling: nothing to do");
+            Check(e.Changes.Count == 3 && e.Changes[0].Kind == '+' && e.Changes[1].Kind == '-' && e.Changes[2].Kind == '~', "three changes are listed, in order");
+            Check(e.Remove("תיבהחדשה") == EditResult.Done && e.Changes.Count == 2 && !e.Contains("תיבהחדשה"), "removing a word of one's own takes back its addition");
+            Check(e.Add("מתרצינן") == EditResult.Done && e.Changes.Count == 1 && e.Contains("מתרצינן"), "adding back a removed word takes back its removal");
+            e.Undo(0);
+            Check(e.Changes.Count == 0 && e.Contains("מיבעי") && !e.Contains("מיבעיי") && e.Count == n0, "undoing the correction: the dictionary is as it was");
+            List<string> sorted = e.Sorted();
+            bool inOrder = sorted.Count == n0;
+            for (int i = 1; i < sorted.Count && inOrder; i++) if (string.CompareOrdinal(sorted[i - 1], sorted[i]) >= 0) inOrder = false;
+            Check(inOrder, "the list of all the words is sorted, without repeats");
+            e.Add("תיבהחדשה");
+            Check(e.Sorted().Contains("תיבהחדשה") && e.Find("יבהחדש").Count >= 1, "the list and the search follow the changes");
+
+            Console.WriteLine("-- 3.0.0.9: the changes are kept in a file, and every installation applies them");
+            List<WordChange> mine = new List<WordChange>();
+            mine.Add(new WordChange('+', "תיבהחדשה", null));
+            mine.Add(new WordChange('-', "מתרצינן", null));
+            mine.Add(new WordChange('~', "מיבעי", "מיבעיי"));
+            mine[0].Sent = true;
+            MyWords.Save(mine);
+            List<WordChange> back = MyWords.Load();
+            Check(back.Count == 3 && back[0].Sent && !back[1].Sent && back[2].Kind == '~' && back[2].Word == "מיבעי" && back[2].NewWord == "מיבעיי", "saved and read back, also what was already sent");
+            Installer.Install(false, false, quiet, false);
+            List<string> inFile = Core.ReadDicWords(main);
+            Check(inFile.Contains("תיבהחדשה") && inFile.Contains("מיבעיי") && !inFile.Contains("מתרצינן") && !inFile.Contains("מיבעי"), "the installed file has the person's changes");
+            Check(inFile.Count == edition.Count, "and nothing else (" + inFile.Count + " words: 2 added, 2 gone)");
+
+            List<string> withWordsOwn = Core.ReadDicWords(main);
+            withWordsOwn.Add("מילהשוורדהוסיף");   // a word that Word itself put into our file ("Add to Dictionary")
+            Core.WriteDic(main, withWordsOwn);
+            mine.RemoveAt(0);                     // the person takes back an addition
+            MyWords.Save(mine);
+            Installer.Install(false, false, quiet, false);
+            inFile = Core.ReadDicWords(main);
+            Check(!inFile.Contains("תיבהחדשה") && inFile.Contains("מילהשוורדהוסיף"), "an addition taken back goes; a word that Word added by itself stays");
+
+            FakeApp hidden = new FakeApp();
+            FakeApp fresh = new FakeApp(); fresh.InEffect = true;
+            fresh.Known = new HashSet<string>(MyWords.Apply(Core.BuildWords(false, false), MyWords.Load()));
+            Result r = InstallWithFakeWord(hidden, false, fresh);
+            Check(r.Ok && r.Text.Contains("מזוהות ✓"), "the check after installing uses only words of the person's dictionary (" + r.Title + ")");
+
+            Installer.Remove(false);
+            List<string> saved = File.Exists(custom) ? Core.ReadDicWords(custom) : new List<string>();
+            Check(MyWords.Load().Count == 2 && saved.Contains("מילהשוורדהוסיף") && !saved.Contains("מיבעיי"),
+                  "removing the dictionary keeps the person's list; only words that Word added go to CUSTOM.DIC");
+            if (File.Exists(custom)) File.Delete(custom);
+            if (File.Exists(custom + ".bak")) File.Delete(custom + ".bak");
+            MyWords.Save(new List<WordChange>());
+            Check(MyWords.Load().Count == 0, "an empty list is saved as empty");
+
+            Console.WriteLine("-- 3.0.0.9: the suggestion that goes to the dictionary's owner");
+            List<WordChange> s = new List<WordChange>();
+            s.Add(new WordChange('+', "ומתרצינן", null));
+            s.Add(new WordChange('-', "בראשיתת", null));
+            s.Add(new WordChange('~', "חזל", "חז\"ל"));
+            string title = Suggest.Title(s);
+            string body = Suggest.Body(s, "ברכות דף ב", "מורחב");
+            Check(title.Contains("1 להוסיף") && title.Contains("1 להסיר") && title.Contains("1 לתקן"), "the title counts the changes");
+            Check(body.Contains("ומתרצינן") && body.Contains("בראשיתת") && body.Contains("חזל ← חז\"ל") && body.Contains("ברכות דף ב") && body.Contains(Core.AppVersion) && body.Contains("מורחב"),
+                  "the text has every change, the note, the version and the edition");
+            Check(Suggest.Json("t", "a \"b\" \\ c\nd") == "{\"title\":\"t\",\"body\":\"a \\\"b\\\" \\\\ c\\nd\"}", "JSON: quotes, backslash and new line are escaped");
+            string url = Suggest.BrowserUrl(title, body);
+            Check(url.StartsWith("https://github.com/elicohen8565-hue/milon-torani-3.0/issues/new?title=") && url.Contains("&body=") && url.IndexOf(' ') < 0, "the page to open in the browser");
+            Check(Suggest.BrowserUrl(title, new string('א', 20000)).Length <= 8000, "a very long suggestion still fits the address of the page");
+            byte[] hiddenKey = Suggest.Encode("github_pat_TEST_123");
+            Check(Suggest.Decode(hiddenKey) == "github_pat_TEST_123" && System.Text.Encoding.UTF8.GetString(hiddenKey).IndexOf("github_pat") < 0, "the key is kept hidden inside the program, and read back");
+            string tk = Suggest.Token();
+            Check(tk == null || (tk.Length > 20 && tk.IndexOf(' ') < 0), "the key inside this program (" + (tk == null ? "none" : "there") + ") reads back whole");
         }
 
         // 3.0.0.8: the findings of the code review (3-11-2026), each one first shown failing on 3.0.0.7
