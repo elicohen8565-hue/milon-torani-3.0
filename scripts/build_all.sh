@@ -10,7 +10,7 @@ EXE_NAME="Milon-Torani-3.0.exe"
 rm -rf "$B" "$ROOT/dist"
 mkdir -p "$B" "$ROOT/dist"
 
-cp "$ROOT"/src/Core.cs "$ROOT"/src/UI.cs "$ROOT"/src/DevDump.cs "$ROOT"/src/CheckApi.cs "$ROOT"/src/build.sh "$ROOT"/src/make_assets.py "$B"/
+cp "$ROOT"/src/Core.cs "$ROOT"/src/UI.cs "$ROOT"/src/Words.cs "$ROOT"/src/DevDump.cs "$ROOT"/src/CheckApi.cs "$ROOT"/src/build.sh "$ROOT"/src/make_assets.py "$B"/
 cp "$ROOT/data/basic_list.txt" "$B/basic.txt"
 cp "$ROOT/data/extended_only_list.txt" "$B/more.txt"
 cp "$ROOT/data/hebrew_base.txt" "$B/hebrew_base.txt"
@@ -18,6 +18,22 @@ cd "$B"
 
 echo "== 1. assets: icon, exact word count of each edition, compressed word lists"
 python3 make_assets.py
+
+# the key for sending suggestions (a GitHub token that may only open issues in this repository), from the secret ISSUE_TOKEN of
+# GitHub Actions. It goes into the program hidden the same way Suggest.Encode in src/Core.cs hides it; it is never printed or kept.
+if [ -n "${ISSUE_TOKEN:-}" ]; then
+  trap 'rm -f "$B/issue.bin"' EXIT   # never left behind, also when a later step fails
+  python3 - <<'PY'
+import os
+t = os.environ["ISSUE_TOKEN"].strip().encode("utf-8")
+mask = b"milon-torani-3.0/issues"
+out = bytes(b ^ mask[i % len(mask)] ^ ((i * 31 + 7) & 0xFF) for i, b in enumerate(t))
+open("issue.bin", "wb").write(out)
+PY
+  echo "the key for sending suggestions: included"
+else
+  echo "the key for sending suggestions: none (suggestions go through the browser)"
+fi
 
 echo "== 2. build against the .NET Framework 4.5 reference assemblies, then the API check of the finished program"
 bash build.sh out
@@ -31,6 +47,7 @@ echo "== 4. the dictionary itself: the four editions byte for byte as in tests/d
 mono out/DevDump.exe dump
 (cd dump && sha256sum -c "$ROOT/tests/dictionary.sha256")
 
+rm -f issue.bin
 cp out/TorahDictionary.exe "$ROOT/dist/$EXE_NAME"
 (cd "$ROOT/dist" && sha256sum "$EXE_NAME" > "$EXE_NAME.sha256")
 echo "OK -> dist/$EXE_NAME"

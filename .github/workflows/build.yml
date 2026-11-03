@@ -23,6 +23,9 @@ jobs:
           sudo apt-get install -y mono-devel mono-mcs libmono-cecil-private-cil python3-pil fonts-dejavu-core
 
       - name: Build and check
+        env:
+          # the key that lets the program send suggestions as issues (see BUILD.md); empty = built without it
+          ISSUE_TOKEN: ${{ secrets.ISSUE_TOKEN }}
         run: bash scripts/build_all.sh
 
       - name: Keep the program with this run

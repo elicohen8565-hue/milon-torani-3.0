@@ -29,6 +29,17 @@ The result is `dist/Milon-Torani-3.0.exe`. You only get it if every check passed
    - When the word lists in `data/` change on purpose, update that file in the same commit.
    - Also add every word that was dropped from the lists to `Core.Retired` (`src/Core.cs`). Otherwise a dropped word left in an installed file is kept as if the user had added it.
 
+## Suggestions from the program (GitHub issues)
+
+After the person saves changes in "word editing", the program offers to send them to the dictionary's owner as a new issue in this repository:
+
+- **Sent by the program itself**, when the program was built with a key: the repository secret `ISSUE_TOKEN`.
+  - It must be a **fine-grained personal access token** with access to **this repository only**, and the one permission **Issues: Read and write**.
+  - `scripts/build_all.sh` hides it inside the program (`Suggest.Encode` in `src/Core.cs`; the script does the same in Python). It is never printed and never committed.
+  - Anyone can dig a key out of a program, so it must never have more rights than that. If it is misused, revoke it on GitHub, make a new one and update the secret.
+- **Through the browser**, when the program has no key, when sending fails, or when the person chooses it: the "new issue" page of GitHub opens already filled in (the person needs a GitHub account).
+- The person's own changes are kept in `%APPDATA%\TorahDictionaryForWord\my-words.txt`, and every installation applies them.
+
 ## A new version
 
 1. Raise the version in **both** places:
@@ -47,6 +58,7 @@ The download name is ASCII on purpose (`Milon-Torani-3.0.exe`), because GitHub m
 |---|---|
 | `src/Core.cs` | All logic: word lists, editions, writing the `.dic` file, Word automation (late-bound COM), registry, install/remove/advanced removal, the check through a hidden Word, log |
 | `src/UI.cs` | The windows (drawn by hand, DPI-aware), `Program.Main`, the self-test and the pretend Word |
+| `src/Words.cs` | The word-editing window and the window that sends a suggestion (the logic behind them is in `Core.cs`: `MyWords`, `WordEdits`, `Suggest`) |
 | `src/DevDump.cs`, `src/CheckApi.cs` | Developer tools |
 | `data/basic_list.txt` | Basic edition (Tanakh, Mishnah, Bavli, Yerushalmi) |
 | `data/extended_only_list.txt` | What the extended edition adds |
@@ -57,6 +69,7 @@ The download name is ASCII on purpose (`Milon-Torani-3.0.exe`), because GitHub m
 - `--dpi N` (50..400): pretends a display scale, for screenshots.
 - `--preview`: shows the "installed" look.
 - `--preview-wordopen [remove]`: shows the "Word is open" window.
+- `--preview-words`, `--preview-suggest`: show the word-editing window and the suggestion window with sample changes. Nothing is saved.
 
 To see the window on Linux:
 

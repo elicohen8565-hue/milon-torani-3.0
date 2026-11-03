@@ -17,7 +17,7 @@ namespace OtzariaDict
     // ---------------------------------------------------------------- files, words, log
     public static class Core
     {
-        public const string AppVersion = "3.0.0.8";
+        public const string AppVersion = "3.0.0.9";
 
         // ONE dictionary file (from 3.0.0.2). With five files Word 365 used only the first ones,
         // while one file of 102,573 words (version 2.0) works. Everything goes into this file, most important words first.
@@ -1770,16 +1770,17 @@ namespace OtzariaDict
                 char kind = line[0];
                 if (kind != '+' && kind != '-' && kind != '~') continue;
                 string[] parts = line.Substring(1).Split(new char[] { '\t' });
-                WordChange c = new WordChange(kind, parts[0], null);
+                WordChange c = new WordChange(kind, WordEdits.Clean(parts[0]), null);
+                if (c.Word == null) continue;   // not a word (the file was changed by hand?): left out
                 int next = 1;
                 if (kind == '~')
                 {
-                    if (parts.Length < 2 || parts[1].Length == 0) continue;
-                    c.NewWord = parts[1];
+                    c.NewWord = parts.Length > 1 ? WordEdits.Clean(parts[1]) : null;
+                    if (c.NewWord == null || c.NewWord == c.Word) continue;
                     next = 2;
                 }
                 c.Sent = parts.Length > next && parts[next] == "sent";
-                if (c.Word.Length > 0) list.Add(c);
+                list.Add(c);
             }
             return list;
         }
@@ -1983,29 +1984,30 @@ namespace OtzariaDict
             StringBuilder sb = new StringBuilder(raw.Length);
             foreach (char ch in raw)
             {
-                if (ch >= '֑' && ch <= 'ׇ' && ch != '־') continue;   // vowel points and cantillation marks (the maqaf stays)
-                if (ch == '​' || ch == '‌' || ch == '‍' || ch == '‎' || ch == '‏' || (ch >= '‪' && ch <= '‮') || ch == '﻿') continue;   // invisible marks
+                if (ch >= '\u0591' && ch <= '\u05C7' && ch != '\u05BE') continue;   // vowel points and cantillation marks (the maqaf stays)
+                if ((ch >= '\u200B' && ch <= '\u200F') || (ch >= '\u202A' && ch <= '\u202E') || (ch >= '\u2066' && ch <= '\u2069') || ch == '\uFEFF') continue;   // invisible marks (direction, joiners, BOM)
                 sb.Append(ch);
             }
             return sb.ToString();
         }
 
         // one word as the person typed it, cleaned (no spaces around it, no vowel points, no invisible marks);
-        // null = not one word: empty, a space inside, a sign that does not belong in a word, or longer than 60 letters
+        // null = not one word: empty, a space inside, a sign that does not belong in a Hebrew word, no Hebrew letter at all, or longer than 60.
+        // (Every word of the editions is made of Hebrew letters, " and ' only, so each of them passes as it is.)
         public static string Clean(string raw)
         {
             if (raw == null) return null;
             string w = Strip(raw).Trim();
             if (w.Length == 0 || w.Length > 60) return null;
+            bool letter = false;
             foreach (char ch in w)
             {
-                bool ok = (ch >= 'א' && ch <= 'ת')                                // Hebrew letters
-                       || ch == '׳' || ch == '״' || ch == '־'                 // geresh, gershayim, maqaf
-                       || ch == '"' || ch == '\'' || ch == '-'
-                       || (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9');
+                if (ch >= '\u05D0' && ch <= '\u05EA') { letter = true; continue; }   // Hebrew letters (with the final forms)
+                bool ok = ch == '\u05F3' || ch == '\u05F4' || ch == '\u05BE'           // geresh, gershayim, maqaf
+                       || ch == '"' || ch == '\'' || ch == '-';
                 if (!ok) return null;
             }
-            return w;
+            return letter ? w : null;
         }
     }
 
@@ -2064,13 +2066,22 @@ namespace OtzariaDict
             return sb.ToString();
         }
 
+        // at most 1,000 lines a section: GitHub takes an issue text of up to 65,536 characters
+        const int MaxLines = 1000;
+
         static void Section(StringBuilder sb, List<WordChange> ch, char kind, string head)
         {
             int n = Count(ch, kind);
             if (n == 0) return;
             sb.Append("### " + head + " (" + n + ")\n");
+            int written = 0;
             foreach (WordChange c in ch)
-                if (c.Kind == kind) sb.Append("- " + (kind == '~' ? c.Word + " ← " + c.NewWord : c.Word) + "\n");
+            {
+                if (c.Kind != kind) continue;
+                if (written == MaxLines) { sb.Append("- (ועוד " + (n - MaxLines) + ")\n"); break; }
+                sb.Append("- " + (kind == '~' ? c.Word + " ← " + c.NewWord : c.Word) + "\n");
+                written++;
+            }
             sb.Append("\n");
         }
 
@@ -2100,18 +2111,29 @@ namespace OtzariaDict
             return sb.ToString();
         }
 
-        // the "new issue" page of GitHub, already filled in; a long suggestion is shortened so that the address stays under 8,000 characters
+        // The "new issue" page of GitHub, already filled in. An address longer than 2,000 characters may not reach the browser whole
+        // (a Hebrew letter takes 6 characters in an address), so a long text is not put in it: cut = true, and the page asks the person
+        // to paste the text there (the window puts it on the clipboard first).
+        public const int MaxUrl = 2000;
+        public const string PasteHere = "<div dir=\"rtl\">\n\nהרשימה ארוכה, ולכן התוכנה העתיקה אותה. מחקו את השורה הזאת והדביקו כאן (Ctrl+V).\n\n</div>\n";
+
         public static string BrowserUrl(string title, string body)
         {
+            bool cut;
+            return BrowserUrl(title, body, out cut);
+        }
+
+        public static string BrowserUrl(string title, string body, out bool cut)
+        {
             string head = "https://github.com/" + Repo + "/issues/new?title=" + Uri.EscapeDataString(title) + "&body=";
-            string url = head + Uri.EscapeDataString(body);
-            int keep = body.Length;
-            while (url.Length > 8000 && keep > 0)
+            cut = body.Length > MaxUrl;   // (checked first: a very long text is never escaped - .NET Framework refuses more than 32,766 characters)
+            if (!cut)
             {
-                keep = keep * 3 / 4;
-                url = head + Uri.EscapeDataString(body.Substring(0, keep) + "\n\n(…הרשימה קוצרה)");
+                string url = head + Uri.EscapeDataString(body);
+                if (url.Length <= MaxUrl) return url;
+                cut = true;
             }
-            return url;
+            return head + Uri.EscapeDataString(PasteHere);
         }
 
         // the key is kept in the program a little hidden (not as plain text); the build writes it the same way (scripts/build_all.sh)

@@ -13,9 +13,9 @@ using System.Windows.Forms;
 [assembly: AssemblyTitle("המילון התורני 3.0")]
 [assembly: AssemblyProduct("המילון התורני 3.0")]
 [assembly: AssemblyDescription("מתקין מילון תורני (תנ״ך, משנה, בבלי, ירושלמי ועוד) ל-Microsoft Word")]
-[assembly: AssemblyVersion("3.0.0.8")]
-[assembly: AssemblyFileVersion("3.0.0.8")]
-[assembly: AssemblyInformationalVersion("3.0.0.8")]
+[assembly: AssemblyVersion("3.0.0.9")]
+[assembly: AssemblyFileVersion("3.0.0.9")]
+[assembly: AssemblyInformationalVersion("3.0.0.9")]
 
 namespace OtzariaDict
 {
@@ -192,6 +192,7 @@ namespace OtzariaDict
     {
         public BaseControl()
         {
+            TabStop = false;   // controls that can be used (buttons, rows, lists, links) turn it on
             SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw | ControlStyles.SupportsTransparentBackColor, true);
         }
     }
@@ -305,6 +306,7 @@ namespace OtzariaDict
     {
         public BtnStyle Style = BtnStyle.Filled;
         public bool Light;   // quiet secondary button: regular weight text
+        public bool Small;   // small text (the buttons inside a row of the word list)
         bool hover, down, viaMouse;
         string subText = "";
         // a small second line under the text of the button (the install button uses it to say exactly what will be installed)
@@ -367,7 +369,7 @@ namespace OtzariaDict
                 Gfx.Frame(g, Rectangle.Inflate(r, -Dpi.S(3), -Dpi.S(3)), Style == BtnStyle.Filled ? Theme.OnPrimary : Theme.Primary, Dpi.S(2));
 
             bool big = Style == BtnStyle.Filled || (Style == BtnStyle.Outlined && !Light);
-            Font f = Theme.F(big ? 15 : 14, !Light);
+            Font f = Theme.F(Small ? 13 : (big ? 15 : 14), !Light);
             if (subText.Length == 0)
                 Gfx.TextAt(g, Text, f, fg, new Rectangle(Dpi.S(8), 0, Width - Dpi.S(16), Height), Align.Center, true, false);
             else
@@ -514,7 +516,7 @@ namespace OtzariaDict
     {
         Header header; StatusLabel chip; TextBlock secTitle, stage, status, footer; LowerPanel lower;
         OptionRow cardBasic, cardExt, cardComp;
-        FlatBtn btnInstall, btnRemove, btnManual, btnRepeat, btnAdvanced;
+        FlatBtn btnInstall, btnRemove, btnManual, btnWords, btnRepeat, btnAdvanced;
         ProgressLine prog;
         bool busy;
         bool asking;   // the "Word is open" window (or the short wait after it) is on: a second click must not start anything
@@ -593,16 +595,19 @@ namespace OtzariaDict
             btnManual = new FlatBtn { Bounds = Dpi.R(40, 16, 640, 40), Text = "התקנה ידנית (אם ההתקנה האוטומטית לא עובדת)", Style = BtnStyle.Tonal };
             btnManual.Click += delegate { StartManual(); };
 
-            btnRepeat = new FlatBtn { Bounds = Dpi.R(370, 68, 310, 38), Text = "הסר שגיאות ממילים כפולות", Style = BtnStyle.Outlined, Light = true };
+            // the second row: the person's own changes to the dictionary (3.0.0.9), repeated words, advanced removal
+            btnWords = new FlatBtn { Bounds = Dpi.R(475, 68, 205, 38), Text = "עריכת מילים", Style = BtnStyle.Tonal };
+            btnWords.Click += delegate { StartWords(); };
+            btnRepeat = new FlatBtn { Bounds = Dpi.R(257, 68, 206, 38), Text = "הסר שגיאות ממילים כפולות", Style = BtnStyle.Outlined, Light = true };
             btnRepeat.Click += delegate { StartRepeated(); };
-            btnAdvanced = new FlatBtn { Bounds = Dpi.R(40, 68, 310, 38), Text = "הסרה מתקדמת", Style = BtnStyle.Outlined, Light = true };
+            btnAdvanced = new FlatBtn { Bounds = Dpi.R(40, 68, 205, 38), Text = "הסרה מתקדמת", Style = BtnStyle.Outlined, Light = true };
             btnAdvanced.Click += delegate { StartAdvanced(); };
 
             string wv = Core.WordVersion();
             footer = new TextBlock { Bounds = Dpi.R(40, 120, 640, 18), Font = Theme.F(13, false), Color = Theme.TextQuiet, Center = true, Wrap = false,
                 Text = "גרסת התוכנה " + Core.AppVersion + "   ·   וורד שזוהה במחשב: " + (wv ?? "לא זוהה") };
 
-            lower.Controls.AddRange(new Control[] { btnManual, btnRepeat, btnAdvanced, footer });
+            lower.Controls.AddRange(new Control[] { btnManual, btnWords, btnRepeat, btnAdvanced, footer });
             // the order of the Tab key follows this order: right to left, so "install" comes before "remove"
             Controls.AddRange(new Control[] { header, secTitle, chip, cardBasic, cardExt, cardComp, btnInstall, btnRemove, prog, stage, status, lower });
             RefreshState(true);
@@ -727,7 +732,7 @@ namespace OtzariaDict
         void SetBusy(bool b)
         {
             busy = b;
-            btnInstall.Enabled = !b; btnRemove.Enabled = !b; btnManual.Enabled = !b; btnRepeat.Enabled = !b; btnAdvanced.Enabled = !b;
+            btnInstall.Enabled = !b; btnRemove.Enabled = !b; btnManual.Enabled = !b; btnWords.Enabled = !b; btnRepeat.Enabled = !b; btnAdvanced.Enabled = !b;
             UseWaitCursor = b;
         }
 
@@ -822,6 +827,51 @@ namespace OtzariaDict
             Work(delegate { return Installer.Remove(true); });
         }
 
+        // the word-editing window (Words.cs). It shows the dictionary that is installed (or, if none is, the one chosen above);
+        // after "save" the same dictionary is installed again, with the person's changes, so that Word has them.
+        void StartWords()
+        {
+            if (busy || asking) return;
+            InstalledInfo info = Core.DetectInstalled();
+            bool installed = info.Edition > 0;
+            bool ext = installed ? info.Edition == 2 : cardExt.Selected;
+            bool comp = installed ? info.Compose : cardComp.Selected;
+            WordsForm wf;
+            UseWaitCursor = true;
+            Cursor.Current = Cursors.WaitCursor;
+            try { wf = new WordsForm(ext, comp, installed, false); }
+            catch (Exception ex)
+            {
+                Core.Log("Opening the word editing failed: " + ex);
+                Say(new Result { Ok = false, Title = "עריכת מילים", Text = "לא הצלחתי לפתוח את עריכת המילים:\r\n" + Core.Msg(ex) + "\r\n\r\nקובץ יומן לשליחה: " + Core.LogPath });
+                return;
+            }
+            finally { UseWaitCursor = false; }
+            using (wf)
+            {
+                wf.ShowDialog(this);
+                if (!wf.Saved) return;
+                string head = "השינויים שלכם במילון נשמרו"
+                            + (wf.Sent ? ", וההצעה נשלחה לבעל המילון. תודה!" : wf.ViaBrowser ? ", ודף ההצעה נפתח בגיטהב." : ".");
+                if (!installed)
+                {
+                    Say(new Result { Ok = true, Title = "השינויים נשמרו", Text = head + "\r\n\r\nהם יחולו כשתתקינו את המילון." });
+                    return;
+                }
+                if (!WordIsClosedOrIgnored(true))
+                {
+                    Say(new Result { Ok = true, Title = "השינויים נשמרו", Text = head + "\r\n\r\nוורד עוד לא עודכן. כדי שהשינויים יחולו, סגרו את וורד ולחצו על \"התקן\"." });
+                    return;
+                }
+                Work(delegate
+                {
+                    Result r = Installer.Install(ext, comp, delegate (int p, string s) { UI(delegate { prog.Value = p; SetStage(s); }); }, true);
+                    r.Text = head + "\r\n\r\n" + r.Text;
+                    return r;
+                });
+            }
+        }
+
         // switch Word's "flag repeated words" off (for ALL repeated words) - or back on
         void StartRepeated()
         {
@@ -897,6 +947,15 @@ namespace OtzariaDict
             int forcedDpi = 0;
             for (int i = 0; i + 1 < args.Length; i++) if (args[i] == "--dpi") int.TryParse(args[i + 1], out forcedDpi);
             Dpi.Init(forcedDpi);
+
+            if (args.Length >= 1 && (args[0] == "--preview-words" || args[0] == "--preview-suggest"))   // for the developer: the word-editing windows, with sample changes that are never saved
+            {
+                Application.EnableVisualStyles();
+                Application.SetCompatibleTextRenderingDefault(false);
+                if (args[0] == "--preview-words") using (WordsForm f = new WordsForm(true, false, true, true)) { f.Shown += delegate { f.Demo(); }; f.ShowDialog(); }
+                else using (SuggestDialog d = new SuggestDialog(WordsForm.DemoChanges(), "מורחב")) d.ShowDialog();
+                return 0;
+            }
 
             if (args.Length >= 1 && args[0] == "--preview-wordopen")   // for the developer: look at the "Word is open" window, without Word ("remove" = the removal wording)
             {
@@ -1411,6 +1470,11 @@ namespace OtzariaDict
             if (File.Exists(custom + ".bak")) File.Delete(custom + ".bak");
             MyWords.Save(new List<WordChange>());
             Check(MyWords.Load().Count == 0, "an empty list is saved as empty");
+            File.WriteAllText(Path.Combine(MyWords.Folder(), MyWords.FileName),
+                "# by hand\r\n+שתי מילים\r\n~מיבעי\r\n-<x>\r\n+  תיבהחדשה \tsent\r\n~מיבעי\tמיבעי\r\n", System.Text.Encoding.UTF8);
+            List<WordChange> byHand = MyWords.Load();
+            Check(byHand.Count == 1 && byHand[0].Word == "תיבהחדשה" && byHand[0].Sent, "a list changed by hand: only real words are read (" + byHand.Count + ")");
+            MyWords.Save(new List<WordChange>());
 
             Console.WriteLine("-- 3.0.0.9: the suggestion that goes to the dictionary's owner");
             List<WordChange> s = new List<WordChange>();
