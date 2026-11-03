@@ -13,9 +13,9 @@ using System.Windows.Forms;
 [assembly: AssemblyTitle("המילון התורני 3.0")]
 [assembly: AssemblyProduct("המילון התורני 3.0")]
 [assembly: AssemblyDescription("מתקין מילון תורני (תנ״ך, משנה, בבלי, ירושלמי ועוד) ל-Microsoft Word")]
-[assembly: AssemblyVersion("3.0.0.9")]
-[assembly: AssemblyFileVersion("3.0.0.9")]
-[assembly: AssemblyInformationalVersion("3.0.0.9")]
+[assembly: AssemblyVersion("3.0.0.10")]
+[assembly: AssemblyFileVersion("3.0.0.10")]
+[assembly: AssemblyInformationalVersion("3.0.0.10")]
 
 namespace OtzariaDict
 {
