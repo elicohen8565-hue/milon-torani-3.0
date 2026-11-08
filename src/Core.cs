@@ -1046,6 +1046,168 @@ namespace OtzariaDict
         }
     }
 
+    // ---------------------------------------------------------------- Word 365's own list of custom dictionaries (in the same registry key)
+    // One numbered entry per dictionary for every signed-in account: "<n>_<account>" = the file (a name in Word's folder, or a full path),
+    // with "<n>_<account>_state", "_roamed", "_external" next to it (e.g. "4_16_7bd116fa7f21d40b_LiveId" = "Milon_Torani.dic").
+    // A dictionary taken out of Word KEEPS its entry, and a file of another name takes a new number. With 10 entries Word refuses to add
+    // any dictionary (CustomDictionaries.Add -> E_FAIL): this happened on 9-11-2026, after a size check had added five test files to a list
+    // that already held two files of version 3.0.0.1 and a WordCheck trial. Entries of files that are never needed again are therefore
+    // deleted - only while no Word runs (a running Word writes its own copy of the list back) - and the numbers that are left are closed up
+    // (1, 2, 3 ... as Word writes them; Word renumbers its list by itself too).
+    public class DictEntry
+    {
+        public int Number;
+        public string Identity = "";                      // "" = an entry without an account (older Office); else e.g. "16_..._LiveId"
+        public string Main;                               // the value that holds the file (null: only settings are left)
+        public string File;
+        public List<string> Names = new List<string>();   // every value of the entry: the file and its settings
+        public string Leaf
+        {
+            get
+            {
+                if (File == null) return null;
+                try { return Path.GetFileName(File); } catch (Exception) { return File; }
+            }
+        }
+    }
+
+    public static class DictList
+    {
+        public const string SizeTestPrefix = "Milon_SizeTest_";
+        static readonly string[] SettingNames = { "state", "roamed", "external", "culturetag" };
+
+        // "4_16_x_LiveId_state" -> 4, "16_x_LiveId", a setting;  "11" -> 11, "", the file;  "1_state" -> 1, "", a setting;  "UpdateComplete" -> false
+        public static bool Parse(string vn, out int number, out string identity, out bool isMain)
+        {
+            number = -1; identity = ""; isMain = false;
+            int cut = vn.IndexOf('_');
+            string head = cut < 0 ? vn : vn.Substring(0, cut);
+            if (head.Length == 0 || !int.TryParse(head, NumberStyles.None, CultureInfo.InvariantCulture, out number)) return false;
+            string rest = cut < 0 ? "" : vn.Substring(cut + 1);
+            if (rest.Length == 0) { isMain = true; return true; }
+            foreach (string st in SettingNames)
+            {
+                if (rest == st) return true;
+                if (rest.EndsWith("_" + st, StringComparison.Ordinal)) { identity = rest.Substring(0, rest.Length - st.Length - 1); return true; }
+            }
+            identity = rest;
+            isMain = true;
+            return true;
+        }
+
+        public static List<DictEntry> Read(RegistryKey k)
+        {
+            Dictionary<string, DictEntry> by = new Dictionary<string, DictEntry>(StringComparer.Ordinal);
+            List<DictEntry> list = new List<DictEntry>();
+            foreach (string vn in k.GetValueNames())
+            {
+                int n; string id; bool main;
+                if (!Parse(vn, out n, out id, out main)) continue;
+                string key = n.ToString(CultureInfo.InvariantCulture) + "|" + id;
+                DictEntry e;
+                if (!by.TryGetValue(key, out e)) { e = new DictEntry(); e.Number = n; e.Identity = id; by[key] = e; list.Add(e); }
+                e.Names.Add(vn);
+                if (main) { e.Main = vn; e.File = Convert.ToString(k.GetValue(vn)); }
+            }
+            list.Sort(delegate (DictEntry a, DictEntry b) { int c = string.CompareOrdinal(a.Identity, b.Identity); return c != 0 ? c : a.Number.CompareTo(b.Number); });
+            return list;
+        }
+
+        // files of older versions, of a size check and of WordCheck trials; with includeMain also our one file (Word adds it again at once)
+        public static bool IsStale(DictEntry e, bool includeMain)
+        {
+            string leaf = e.Leaf;
+            if (leaf == null) return false;
+            foreach (string f in Core.LegacyFiles) if (string.Equals(leaf, f, StringComparison.OrdinalIgnoreCase)) return true;
+            if (includeMain && string.Equals(leaf, Core.MainFile, StringComparison.OrdinalIgnoreCase)) return true;
+            return leaf.StartsWith(SizeTestPrefix, StringComparison.OrdinalIgnoreCase)
+                || (leaf.StartsWith("wordcheck", StringComparison.OrdinalIgnoreCase) && leaf.EndsWith(".dic", StringComparison.OrdinalIgnoreCase));
+        }
+
+        static void Rename(RegistryKey k, string from, string to)
+        {
+            object v = k.GetValue(from, null, RegistryValueOptions.DoNotExpandEnvironmentNames);
+            RegistryValueKind kind = k.GetValueKind(from);
+            k.SetValue(to, v, kind);
+            k.DeleteValue(from, false);
+        }
+
+        // deletes the stale entries and closes up the numbers; returns what was done, one line each
+        public static List<string> Clean(RegistryKey k, bool includeMain)
+        {
+            List<string> done = new List<string>();
+            foreach (DictEntry e in Read(k))
+            {
+                if (!IsStale(e, includeMain)) continue;
+                foreach (string vn in e.Names) k.DeleteValue(vn, false);
+                done.Add("deleted " + e.Number + (e.Identity.Length > 0 ? " (" + e.Identity + ")" : "") + " " + e.File);
+            }
+            if (done.Count == 0) return done;
+            // entries are moved down in order, so the number an entry moves to is always free
+            Dictionary<string, List<DictEntry>> byId = new Dictionary<string, List<DictEntry>>(StringComparer.Ordinal);
+            foreach (DictEntry e in Read(k))
+            {
+                if (e.Main == null) continue;   // settings without a file (left by Office itself): not touched
+                List<DictEntry> l;
+                if (!byId.TryGetValue(e.Identity, out l)) { l = new List<DictEntry>(); byId[e.Identity] = l; }
+                l.Add(e);
+            }
+            foreach (KeyValuePair<string, List<DictEntry>> kv in byId)
+            {
+                kv.Value.Sort(delegate (DictEntry a, DictEntry b) { return a.Number.CompareTo(b.Number); });
+                for (int i = 0; i < kv.Value.Count; i++)
+                {
+                    DictEntry e = kv.Value[i];
+                    int want = i + 1;
+                    if (e.Number == want) continue;
+                    string oldHead = e.Number.ToString(CultureInfo.InvariantCulture), newHead = want.ToString(CultureInfo.InvariantCulture);
+                    foreach (string vn in e.Names) Rename(k, vn, newHead + vn.Substring(oldHead.Length));
+                    done.Add("moved " + e.Number + " -> " + want + (e.Identity.Length > 0 ? " (" + e.Identity + ")" : "") + " " + e.File);
+                    e.Number = want;
+                }
+            }
+            return done;
+        }
+
+        // the same on the real list; never fails (a problem only goes to the log). Returns how many entries were deleted.
+        public static int CleanStale(bool includeMain, string when)
+        {
+            try
+            {
+                using (RegistryKey k = Registry.CurrentUser.OpenSubKey(RegFallback.KeyPath, true))
+                {
+                    if (k == null) return 0;
+                    List<string> done = Clean(k, includeMain);
+                    int deleted = 0;
+                    foreach (string line in done) { Core.Log("Word's list (" + when + "): " + line); if (line.StartsWith("deleted")) deleted++; }
+                    return deleted;
+                }
+            }
+            catch (Exception ex) { Core.Log("Word's list could not be cleaned (" + when + "): " + Core.Msg(ex)); return 0; }
+        }
+
+        // the files of the person's Office personal dictionary (RoamingCustom.dic) that Word's list holds
+        public static List<string> RoamingFiles()
+        {
+            List<string> found = new List<string>();
+            try
+            {
+                using (RegistryKey k = Registry.CurrentUser.OpenSubKey(RegFallback.KeyPath))
+                {
+                    if (k == null) return found;
+                    foreach (DictEntry e in Read(k))
+                    {
+                        if (e.File == null || !string.Equals(e.Leaf, "RoamingCustom.dic", StringComparison.OrdinalIgnoreCase)) continue;
+                        try { if (Path.IsPathRooted(e.File) && System.IO.File.Exists(e.File) && !found.Contains(e.File)) found.Add(e.File); }
+                        catch (Exception) { }
+                    }
+                }
+            }
+            catch (Exception ex) { Core.Log("Word's list could not be read: " + Core.Msg(ex)); }
+            return found;
+        }
+    }
+
     // ---------------------------------------------------------------- the whole install / remove procedure (UI-independent, so it can be tested)
     public class Result
     {
@@ -1095,6 +1257,9 @@ namespace OtzariaDict
             bool wordMissing = false;
             if (useWord)
             {
+                // entries of files that are never needed again fill Word's list (it takes no dictionary at all when it holds 10): they go,
+                // but only while no Word runs - a running Word would write its own copy of the list back
+                if (WordCom.RunningWordCount() == 0) DictList.CleanStale(false, "before the installation");
                 progress(15, "מתחבר לוורד (בפעם הראשונה זה יכול לקחת כמה שניות)…");
                 try { ws = WordCom.Open(); res.WordWasOpen = !ws.Created; }
                 catch (WordMissingException) { wordMissing = true; Core.Log("Word missing"); }
@@ -1198,10 +1363,29 @@ namespace OtzariaDict
                         }
                         catch (Exception ex2) { comProblem = Core.Msg(ex2); Core.Log("Word add failed again: " + comProblem); }
                     }
+                    // Word refuses every dictionary when its list is full (10 entries, see DictList): our hidden Word is closed, the list is
+                    // cleaned - our own entry too - and a new hidden Word is asked. Not with the person's Word: it would write the old list back.
+                    if (!registered && startedHidden && WordCom.RunningWordCount() == 0)
+                    {
+                        try
+                        {
+                            ws.Dispose(); ws = null;
+                            if (!WordCom.WaitForOurWordsToExit(8000)) Thread.Sleep(1500);
+                            DictList.CleanStale(true, "Word refused the dictionary");
+                            ws = WordCom.OpenNew();
+                            try { WordCom.RemoveOurs(ws); } catch (Exception) { }
+                            WordCom.Add(ws, mainPath);
+                            registered = true;
+                            comProblem = null;
+                            Core.Log("Word took the dictionary after its list was cleaned");
+                        }
+                        catch (Exception ex3) { comProblem = Core.Msg(ex3); Core.Log("Word add failed after the list was cleaned: " + comProblem); }
+                    }
                     Core.Log("timing: dictionary written and added to Word after " + sw.ElapsedMilliseconds + " ms");
                     if (registered)
                     {
                         WordCom.KeepOursNotDefault(ws, dir);
+                        ReEnableRoaming(ws);
                         RegFallback.DumpToLog("right after Word added the dictionary");
                     }
                 }
@@ -1320,6 +1504,22 @@ namespace OtzariaDict
         // and the dictionary will be known to that Word only after it is closed and opened again - never a "does not recognize".
         // the person's changes applied to the words of the edition; returns the person's own words that may be in our file from before
         // (null = the person's list could not be read: then the edition is installed as it is, and nothing in the old file is lost)
+        // Office's personal dictionary of the person (RoamingCustom.dic: the words they added with "Add to Dictionary") is in Word's list but
+        // not in use (on 9-11-2026 it was found so after Word's list had been full): it is put back into use. Never fails the installation.
+        static void ReEnableRoaming(WordSession ws)
+        {
+            try
+            {
+                foreach (string path in DictList.RoamingFiles())
+                {
+                    if (WordCom.IsListed(ws, Path.GetFileName(path))) continue;
+                    WordCom.Add(ws, path);
+                    Core.Log("The person's Office dictionary was put back into use: " + path);
+                }
+            }
+            catch (Exception ex) { Core.Log("The person's Office dictionary could not be put back into use: " + Core.Msg(ex)); }
+        }
+
         static HashSet<string> MyChanges(ref List<string> words, out List<WordChange> mine)
         {
             mine = null;

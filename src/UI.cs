@@ -1087,6 +1087,7 @@ namespace OtzariaDict
             public List<FakeDict> Items = new List<FakeDict>();
             public FakeDict Active;      // the default dictionary, where Word puts the words the person adds
             public bool FailAdd;         // true = Word refuses to add a dictionary
+            public Func<bool> FailAddWhen;   // Word refuses while this says so (3.0.0.10: its own list in the registry is full)
             public int Count { get { return Items.Count; } }
             public FakeDict Item(int i) { return Items[i - 1]; }   // Word counts from 1
             // like Word: when none was chosen, the first dictionary of the list is the default
@@ -1097,7 +1098,7 @@ namespace OtzariaDict
             }
             public FakeDict Add(string path)
             {
-                if (FailAdd) throw new InvalidOperationException("simulated: Word could not add the dictionary");
+                if (FailAdd || (FailAddWhen != null && FailAddWhen())) throw new InvalidOperationException("simulated: Word could not add the dictionary");
                 App.Added.Add(path);
                 FakeDict d = new FakeDict(this, System.IO.Path.GetFileName(path), System.IO.Path.GetDirectoryName(path));
                 Items.Add(d);
@@ -1554,9 +1555,74 @@ namespace OtzariaDict
             try { f2 = InstallWithFakeWord(w2, true, null); } finally { Core.FailWriteHook = null; }
             Check(!f2.Ok && w2.Deleted == 0 && w2.Added.Count == 0, "the folder cannot be written at all: Word was not touched");
 
+            Console.WriteLine("-- 3.0.0.10: Word's own list of dictionaries (registry, one entry per file and account) is full");
+            {
+                string acct = "16_7bd116fa7f21d40b_LiveId";
+                string roamPath = Path.Combine(Path.Combine(dir, "Proofing"), "RoamingCustom.dic");
+                Directory.CreateDirectory(Path.GetDirectoryName(roamPath));
+                Core.WriteDic(roamPath, new List<string> { "מילהשלי" });
+                Action<string[]> setList = delegate (string[] files)
+                {
+                    Microsoft.Win32.Registry.CurrentUser.DeleteSubKeyTree(RegFallback.KeyPath, false);
+                    using (Microsoft.Win32.RegistryKey k = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(RegFallback.KeyPath))
+                    {
+                        k.SetValue("UpdateComplete", 1, Microsoft.Win32.RegistryValueKind.DWord);
+                        for (int i = 0; i < files.Length; i++)
+                        {
+                            string h = (i + 1).ToString(CultureInfo.InvariantCulture) + "_" + acct;
+                            k.SetValue(h, files[i], Microsoft.Win32.RegistryValueKind.String);
+                            k.SetValue(h + "_state", new byte[] { 0, 0, 0, 0 }, Microsoft.Win32.RegistryValueKind.Binary);
+                            k.SetValue(h + "_roamed", new byte[] { 0, 0, 0, 0 }, Microsoft.Win32.RegistryValueKind.Binary);
+                            k.SetValue(h + "_external", new byte[] { 0, 0, 0, 0 }, Microsoft.Win32.RegistryValueKind.Binary);
+                        }
+                    }
+                };
+                Func<List<string>> wordList = delegate
+                {
+                    List<string> l = new List<string>();
+                    using (Microsoft.Win32.RegistryKey k = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(RegFallback.KeyPath))
+                        foreach (DictEntry e in DictList.Read(k)) if (e.Main != null && e.Identity == acct) l.Add(e.Number + ":" + e.Leaf);
+                    return l;
+                };
+                Func<bool> full = delegate { return wordList().Count >= 10; };
+                int n0; string id0; bool m0;
+                Check(DictList.Parse("4_" + acct, out n0, out id0, out m0) && n0 == 4 && id0 == acct && m0
+                      && DictList.Parse("10_" + acct + "_roamed", out n0, out id0, out m0) && n0 == 10 && !m0
+                      && DictList.Parse("1_state", out n0, out id0, out m0) && id0 == "" && !m0
+                      && !DictList.Parse("UpdateComplete", out n0, out id0, out m0), "the names of Word's list are read");
+
+                // a. as on the user's computer (9-11): files of 3.0.0.1, a WordCheck trial and five size-check files fill the list
+                setList(new string[] { roamPath, "Otzaria_Torah_Basic.dic", "Otzaria_Torah_Acronyms.dic", Core.MainFile, Path.Combine(dir, "wordcheck_trial.dic"),
+                    "Milon_SizeTest_175000.dic", "Milon_SizeTest_200000.dic", "Milon_SizeTest_250000.dic", "Milon_SizeTest_300000.dic", "Milon_SizeTest_400000.dic" });
+                FakeApp fullWord = new FakeApp(); fullWord.Dicts.FailAddWhen = full;
+                FakeApp checkF = new FakeApp(); checkF.InEffect = true; checkF.Known = basicWords;
+                Result fa = InstallWithFakeWord(fullWord, false, checkF);
+                Check(fa.Ok && fullWord.Added.Contains(main), "before Word starts the old entries go, and Word takes the dictionary (" + fa.Title + ")");
+                Check(string.Join(" ", wordList().ToArray()) == "1:RoamingCustom.dic 2:Milon_Torani.dic", "the list: the person's dictionary, ours moved up to 2 (" + string.Join(" ", wordList().ToArray()) + ")");
+                Check(fullWord.Added.Contains(roamPath), "the person's Office dictionary, not in use, is put back into use");
+
+                // b. the list is full of the person's own dictionaries and ours: ours goes too, and a new hidden Word takes the dictionary
+                setList(new string[] { roamPath, "Own1.dic", "Own2.dic", "Own3.dic", "Own4.dic", "Own5.dic", "Own6.dic", "Own7.dic", "Own8.dic", Core.MainFile });
+                FakeApp fullWord2 = new FakeApp(); fullWord2.Dicts.FailAddWhen = full;
+                FakeApp freshF = new FakeApp(); freshF.Dicts.FailAddWhen = full; freshF.InEffect = true; freshF.Known = basicWords;
+                Result fb = InstallWithFakeWord(fullWord2, false, freshF);
+                Check(fb.Ok && freshF.Added.Contains(main) && fb.Text.Contains("מזוהות ✓"), "Word refused, the list was cleaned, a new Word took it (" + fb.Title + ")");
+                List<string> left = wordList();
+                Check(left.Count == 9 && left.Contains("2:Own1.dic") && left.Contains("9:Own8.dic"), "the person's eight dictionaries stay (" + string.Join(" ", left.ToArray()) + ")");
+
+                // c. the person's own Word is open and refuses: our entry is not taken out of the list (that Word would write its old copy
+                //    back). (Whether a Word runs is asked of Windows; here none does, so the old files' entries still go before the start.)
+                setList(new string[] { roamPath, "Otzaria_Torah_Basic.dic", Core.MainFile });
+                FakeApp open = new FakeApp(); open.Dicts.FailAdd = true;
+                InstallWithFakeWord(open, true, null);
+                Check(string.Join(" ", wordList().ToArray()) == "1:RoamingCustom.dic 2:Milon_Torani.dic", "Word was open: our entry stays in the list (" + string.Join(" ", wordList().ToArray()) + ")");
+                Microsoft.Win32.Registry.CurrentUser.DeleteSubKeyTree(RegFallback.KeyPath, false);
+            }
+
             Console.WriteLine("-- 3.0.0.8: Word refuses to add the dictionary: the registry route is checked, not just assumed");
             FakeApp refuseAdd = new FakeApp(); refuseAdd.Dicts.FailAdd = true;
             FakeApp check3 = new FakeApp(); check3.InEffect = true; check3.Known = basicWords;
+            check3.Dicts.FailAdd = true;   // 3.0.0.10: a new hidden Word is asked again after the list is cleaned - this one refuses too
             Result g1 = InstallWithFakeWord(refuseAdd, false, check3);
             Check(RegNumberOf(main) != null, "our file is in Word's registry list");
             Check(g1.Ok && g1.Title == "ההתקנה הושלמה" && g1.Text.Contains("מזוהות ✓"), "a new Word knows the words: done (" + g1.Title + ")");
