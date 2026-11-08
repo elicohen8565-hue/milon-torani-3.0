@@ -17,7 +17,7 @@ namespace OtzariaDict
     // ---------------------------------------------------------------- files, words, log
     public static class Core
     {
-        public const string AppVersion = "3.0.0.10";
+        public const string AppVersion = "3.1.0.0";
 
         // ONE dictionary file (from 3.0.0.2). With five files Word 365 used only the first ones,
         // while one file of 102,573 words (version 2.0) works. Everything goes into this file, most important words first.

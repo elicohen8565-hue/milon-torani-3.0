@@ -1,4 +1,4 @@
-# Building and checking Torah Dictionary 3.0
+# Building and checking Torah Dictionary 3.1
 
 The program is a WinForms installer in C# 5 for .NET Framework 4.5. It is built on Linux with Mono, and it runs on Windows 10/11 with Microsoft Word.
 
@@ -9,7 +9,7 @@ sudo apt-get install -y mono-devel mono-mcs libmono-cecil-private-cil python3-pi
 bash scripts/build_all.sh
 ```
 
-The result is `dist/Milon-Torani-3.0.exe`. You only get it if every check passed. GitHub Actions (`.github/workflows/build.yml`) runs the same script on every push.
+The result is `dist/Milon-Torani-3.1.exe` (and the same file as `dist/Milon-Torani-3.0.exe`, the name that the 3.0 download links use). You only get it if every check passed. GitHub Actions (`.github/workflows/build.yml`) runs the same script on every push.
 
 ## What the script does, and the rules behind it
 
@@ -50,7 +50,7 @@ After the person saves changes in "word editing", the program offers to send the
 
 When the checks pass, `scripts/release.sh` publishes the release `v<version>` with the program. A push that keeps the same version number builds and tests the program, but publishes nothing.
 
-The download name is ASCII on purpose (`Milon-Torani-3.0.exe`), because GitHub may rename release files whose names have other characters. Inside Windows, the program, its window and its file details are named "המילון התורני 3.0".
+The download name is ASCII on purpose (`Milon-Torani-3.1.exe`; a release also carries the same file as `Milon-Torani-3.0.exe`, so that old links keep working), because GitHub may rename release files whose names have other characters. Inside Windows, the program, its window and its file details are named "המילון התורני 3.1".
 
 ## Files
 

@@ -2,11 +2,13 @@
 # Builds the program from this repository and runs every check. GitHub Actions runs exactly this; by hand (Ubuntu 24.04):
 #   sudo apt-get install -y mono-devel mono-mcs libmono-cecil-private-cil python3-pil fonts-dejavu-core
 #   bash scripts/build_all.sh
-# Result: dist/Milon-Torani-3.0.exe - only when every check below has passed (any failure stops the script).
+# Result: dist/Milon-Torani-3.1.exe (and the same file as Milon-Torani-3.0.exe, the name of the old download links) -
+# only when every check below has passed (any failure stops the script).
 set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 B="$ROOT/build"
-EXE_NAME="Milon-Torani-3.0.exe"
+EXE_NAME="Milon-Torani-3.1.exe"
+OLD_NAME="Milon-Torani-3.0.exe"   # links to the 3.0 download (README of 3.0, posts) keep getting the newest version
 rm -rf "$B" "$ROOT/dist"
 mkdir -p "$B" "$ROOT/dist"
 
@@ -49,6 +51,7 @@ mono out/DevDump.exe dump
 
 rm -f issue.bin
 cp out/TorahDictionary.exe "$ROOT/dist/$EXE_NAME"
-(cd "$ROOT/dist" && sha256sum "$EXE_NAME" > "$EXE_NAME.sha256")
+cp out/TorahDictionary.exe "$ROOT/dist/$OLD_NAME"
+(cd "$ROOT/dist" && sha256sum "$EXE_NAME" > "$EXE_NAME.sha256" && sha256sum "$OLD_NAME" > "$OLD_NAME.sha256")
 echo "OK -> dist/$EXE_NAME"
 cat "$ROOT/dist/$EXE_NAME.sha256"
