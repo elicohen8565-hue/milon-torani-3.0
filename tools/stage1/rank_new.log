@@ -1,0 +1,18 @@
+sources: four, library, sefaria, beitaharon, dicta, ksk, morebooks, natlib, onyourway, orayta, small, toratemet
+forms not in the dictionary (2-12 letters), all sources together: 1896242
+with real evidence (2+ sources or 3+ files): 1202333 | rare (1 source, 1-2 files): 693909
+  of them ONLY in the additional libraries: 119926 (in 2+ of them: 85012)
+  untested forms of the old sources that the additional libraries confirm: 732001
+Hspell is asked about 1023674 untested forms...
+by the earlier Word check: {'accepted': 97697, 'untested': 1023674, 'marked': 80962}
+untested: 1023674 | Hspell knows 457109, does not know 566565 | already in chibur torani: 3131
+expected that Word marks: about 11428 of the Hspell-known + about 464583 of the Hspell-unknown
+  untested in 2+ sources: 985806 (Hspell does not know 538482)
+  untested in 3+ sources: 582852 (Hspell does not know 247357)
+  untested in 4+ sources: 368637 (Hspell does not know 110041)
+  untested in 5+ sources: 246272 (Hspell does not know 44180)
+  untested in 6+ sources: 173287 (Hspell does not know 15318)
+  untested in 8+ sources: 92488 (Hspell does not know 881)
+marked earlier and still missing: 80962
+examples, untested, Hspell does not know, most sources: לחיואי(11/27) למו"ר(10/137) נוכרים(10/74) שאמאי(10/44) לנוכרים(10/43) שאיתקש(10/29) ביכ"נ(10/24) ההורגם(10/23) ומתעצלין(10/23) פף(10/19) אומריהם(10/17) דיסקין(9/318) יצ(9/57) דהדחיה(9/45) והש"ר(9/40) דבאנוס(9/40) והגאב"ד(9/39) דבמקומותינו(9/39) וכהב"ח(9/37) גכ(9/36) דמוטלת(9/36) כאר"י(9/35) למירון(9/35) ובסק"ו(9/34) ממהר"ל(9/33) מפיר"ח(9/32) יצטרע(9/31) שכב"ת(9/30) דגרדומין(9/30) דבהגביה(9/28) ובדיוטא(9/27) וכנ(9/26) ושיכר(9/26) ננ(9/26) דהויית(9/26) ההקטר(9/25) דלכשיהיו(9/25) דיבשות(9/25) שחשיבא(9/25) שבביה"ש(9/24)
+examples, only in the additional libraries: והנו"כ(6/65) ובד"כ(6/35) למנהלי(6/35) שהונהגו(6/19) שאאמו"ר(6/17) להחמדת(6/16) ממנהלי(6/16) העילאי(6/15) ובטי"ת(6/13) משורטטין(6/12) דמסופר(6/12) ראב"ק(6/12) מתגלחים(6/10) ובכיבושין(6/10) ובסח(6/10) שהדלקתו(6/9) שההזייה(6/7) עקשטיין(5/59) ווארשה(5/58) פארק(5/56) נידו"ד(5/55) וזל"ק(5/53) הרהגה"צ(5/50) ההדדי(5/48) לידי"ן(5/44) עקרוניים(5/43) מוהרא"ל(5/42) ומהראד"ב(5/35) לכתחילה'(5/33) בהמתיר(5/33) ובנדו"ד(5/32) ובסוס"י(5/32) חובבי(5/32) הרד"ד(5/31) לההו"א(5/31) לנמוק"י(5/30) דבהמשנה(5/29) צילומי(5/28) הקו"א(5/27) למימון(5/27)

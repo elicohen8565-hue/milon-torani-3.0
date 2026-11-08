@@ -1,0 +1,24 @@
+basic edition 63074 (list 52116 + generated acronyms 10958) | extended edition 134173 | extended-only 71099
+forms in the four books: otzaria 137891, sefaria 139114, mamre_tanakh 39390, mamre_bavli 92511 | all together 145605
+
+1. EXTENDED-ONLY words that appear in the four books: 796 (of 71099 extended-only)
+   in how many of the 4 copies: {1: 545, 2: 251}
+   in which books: {'yerushalmi': 491, 'bavli': 338, 'tanakh': 6, 'mishnah': 1}
+   Word knows by itself (K): 55
+   in 2+ copies: 251 | in 1 copy only: 545
+   examples (most copies, most frequent): קוהלת(2/219) דנייאל(2/146) ביה"כ(2/31) קיג(2/26) ראב"י(2/25) ראב"ע(2/25) אומ'(2/19) קז(2/18) בע"כ(2/17) אקב"ו(2/17) קכב(2/16) קיח(2/15) בפ"נ(2/15) וחמישיתו(2/15) מבע"י(2/13) ובפ"נ(2/11) ונואלו(2/10) ולר"ע(2/10) חזיוהו(2/10) בשכ"מ(2/8) לוי"ו(2/8) דנסבא(2/8) מש"פ(2/8) שכ"מ(2/8) כנה"ג(2/8) אחילתא(2/8) לשויי(2/8) אשמעי'(2/7) לכה"ג(2/7) לריב"ל(2/7)
+   examples found in one copy only: הושעי'(14) ביה"ש(11) בפה"א(9) מתכווין(9) והעכו"ם(7) יסוי(7) דרשב"י(6) ב"נ(6) ויה"כ(6) קריי'(6) למ'(6) נתכווין(6) ב"פ(5) תורמסין(5) שבנתים(5) והאיזוב(5) בה"כ(5) ריב"נ(4) הל"מ(4) ידודון(4)
+
+2. forms of the four books in NO edition: 92152
+   Word marks them (tested): 5279 | Word accepts them (tested): 81540 | not tested yet: 5333
+   marked, by copies: {1: 3006, 2: 885, 3: 1272, 4: 116}
+   marked, most frequent: אמו(4/2099) חמשים(4/1176) ואמו(4/463) חטים(4/386) בלבו(4/300) אמך(4/281) לבך(4/260) הקרבן(4/226) הוות(4/220) לאמו(4/157) ערלתו(4/138) בלבי(4/100) חזון(4/89) ולאמו(4/85) טהרתו(4/63) ואמך(4/52) מלבו(4/49) החטים(4/45) אנשא(4/44) אדרש(4/44) להרגו(4/44) בחכמתו(4/42) בלבם(4/42) חכמתו(4/41) קרבנם(4/41) אמכם(4/35) מצלו(4/33) לטהרתו(4/31) וערלתם(4/30) עזו(4/30)
+   not tested, 2-12 letters: 5282 (in 2+ copies 535) | 1 letter or 13+: 51
+   not tested, most frequent: למתני'(2/24) ודר'(2/22) מכ'(2/16) בי'(2/14) לחו"ל(2/10) בלמ"ד(2/10) בל'(2/9) לבע"ח(2/9) דברי'(2/9) קדוש'(2/8) שני'(2/8) במוצ"ש(2/8) הוקר(2/8) לא'(2/7) ועוצם(2/7) נכסי'(2/7) ואח'(2/7) חייבי'(2/6) כשהקב"ה(2/6) בטלוהו(2/6) מחו"ל(2/6) בבואך(2/6) בנדרי'(2/6) ערובתם(2/6) בהיותן(2/6) ולשומרי(2/6) וביער(2/5) אסור'(2/5) בו'(2/5) לח'(2/5)
+
+3. words of the BASIC list (not the generated acronyms) that appear in none of the four books: 0 of 52116
+   of them in the rest of the library: 0 | nowhere at all: 0 | Word knows by itself: 0
+   examples (most frequent in the library): 
+   examples (nowhere): 
+
+(the generated acronyms: 10958, of them appear in the four books: 541 - they stay in basic by design)
