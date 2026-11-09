@@ -210,7 +210,8 @@ namespace OtzariaDict
         public static void TextAt(Graphics g, string s, Font f, Color c, Rectangle r, Align a, bool vcenter, bool wrap)
         {
             TextFormatFlags fl = TextFormatFlags.RightToLeft | TextFormatFlags.NoPrefix;
-            fl |= wrap ? (TextFormatFlags.WordBreak | TextFormatFlags.TextBoxControl) : TextFormatFlags.SingleLine;
+            // one line that is too long ends with "…" (instead of being cut off - with Windows' own fonts a text may be a little wider)
+            fl |= wrap ? (TextFormatFlags.WordBreak | TextFormatFlags.TextBoxControl) : (TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis);
             fl |= a == Align.Center ? TextFormatFlags.HorizontalCenter : a == Align.Right ? TextFormatFlags.Right : TextFormatFlags.Left;
             if (vcenter) fl |= TextFormatFlags.VerticalCenter;
             TextRenderer.DrawText(g, s, f, r, c, fl);
@@ -402,7 +403,7 @@ namespace OtzariaDict
         string subText = "";
         // a small second line under the text of the button (the install button uses it to say exactly what will be installed)
         public string SubText { get { return subText; } set { subText = value ?? ""; Invalidate(); } }
-        public FlatBtn() { Cursor = Cursors.Hand; TabStop = true; }
+        public FlatBtn() { Cursor = Cursors.Hand; TabStop = true; AccessibleRole = AccessibleRole.PushButton; }
         protected override void OnMouseEnter(EventArgs e) { hover = true; Invalidate(); base.OnMouseEnter(e); }
         protected override void OnMouseLeave(EventArgs e) { hover = false; down = false; Invalidate(); base.OnMouseLeave(e); }
         protected override void OnMouseDown(MouseEventArgs e) { down = true; viaMouse = true; Focus(); Invalidate(); base.OnMouseDown(e); }
@@ -478,7 +479,7 @@ namespace OtzariaDict
     {
         public Glyph Icon;
         bool hover, down, viaMouse;
-        public IconBtn() { Cursor = Cursors.Hand; TabStop = true; }
+        public IconBtn() { Cursor = Cursors.Hand; TabStop = true; AccessibleRole = AccessibleRole.PushButton; }
         protected override void OnMouseEnter(EventArgs e) { hover = true; Invalidate(); base.OnMouseEnter(e); }
         protected override void OnMouseLeave(EventArgs e) { hover = false; down = false; Invalidate(); base.OnMouseLeave(e); }
         protected override void OnMouseDown(MouseEventArgs e) { down = true; viaMouse = true; Focus(); Invalidate(); base.OnMouseDown(e); }
@@ -743,14 +744,18 @@ namespace OtzariaDict
             BackColor = Theme.Card;
             Font = Theme.F(14, false);
             Icon = MainForm.AppIcon();
+            // a screen reader announces a dialog, its title and its text (the text is painted, so it is given here too)
+            AccessibleRole = AccessibleRole.Dialog;
             AccessibleName = title;
             AccessibleDescription = text;
+            copyText = title + "\r\n\r\n" + text;
 
             int width = Dpi.S(520), pad = Dpi.S(28), inner = width - 2 * pad;
             Font titleFont = Theme.F(20, true), bodyFont = Theme.F(14, false);
             int titleW = inner - Dpi.S(24) - Dpi.S(12);
             int titleH = Math.Max(Dpi.S(32), TextRenderer.MeasureText(title, titleFont, new Size(titleW, int.MaxValue), Wrap).Height + Dpi.S(2));
             MarkTitle head = new MarkTitle { Bounds = new Rectangle(pad, Dpi.S(22), inner, titleH), Kind = kind, Font = titleFont, Text = title };
+            head.AccessibleName = title; head.AccessibleRole = AccessibleRole.StaticText;
 
             // the text: as high as it needs, up to what the screen has room for; beyond that it scrolls
             int top = head.Bottom + Dpi.S(10);
@@ -771,8 +776,9 @@ namespace OtzariaDict
                 {
                     Bounds = new Rectangle(pad, top, inner, room), Multiline = true, ReadOnly = true, ScrollBars = ScrollBars.Vertical, WordWrap = true,
                     BorderStyle = BorderStyle.None, BackColor = Theme.Card, ForeColor = Theme.Text, Font = bodyFont, RightToLeft = RightToLeft.Yes,
-                    TabStop = false, Text = text
+                    TabStop = true, Text = text   // reachable with Tab, to scroll and copy with the keyboard
                 };
+            body.AccessibleName = text; body.AccessibleRole = AccessibleRole.StaticText;
 
             LowerPanel strip = new LowerPanel { Bounds = new Rectangle(0, body.Bottom + Dpi.S(24), width, Dpi.S(76)) };
             List<FlatBtn> buttons = new List<FlatBtn>();
@@ -793,13 +799,28 @@ namespace OtzariaDict
             strip.Controls.AddRange(buttons.ToArray());   // the tab order follows this order (right to left)
             Controls.AddRange(new Control[] { head, body, strip });
             ClientSize = new Size(width, strip.Bottom);
-            ActiveControl = buttons[Math.Max(0, Math.Min(focus, buttons.Count - 1))];
+            FlatBtn first = buttons[Math.Max(0, Math.Min(focus, buttons.Count - 1))];
+            first.AccessibleDescription = title + ". " + text;   // read out with the button that has the focus when the window opens
+            ActiveControl = first;
         }
+
+        readonly string copyText;
 
         protected override bool ProcessDialogKey(Keys keyData)
         {
             if (keyData == Keys.Escape) { answer = escape; Close(); return true; }
             return base.ProcessDialogKey(keyData);
+        }
+
+        // Ctrl+C copies the title and the text, as the Windows message box does (in the scrolling text box it copies what is selected there)
+        protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
+        {
+            if (keyData == (Keys.Control | Keys.C) && !(ActiveControl is TextBox))
+            {
+                try { Clipboard.SetText(copyText); } catch (Exception) { }
+                return true;
+            }
+            return base.ProcessCmdKey(ref msg, keyData);
         }
 
         // the sound of the Windows message box of the same kind
@@ -1031,14 +1052,15 @@ namespace OtzariaDict
             else
             {
                 string name = (info.Edition == 2 ? "מורחב" : info.Edition == 1 ? "בסיסי" : "חיבור תורני בלבד") + (info.Edition > 0 && info.Compose ? " + חיבור תורני" : "");
+                // short, so that it fits in the pill with Windows' fonts too (3.1 review): the installed version, or "an update is available"
                 string ver;
                 bool current = false;
-                if (info.Version == null) ver = "גרסה ישנה · מומלץ לעדכן";
+                if (info.Version == null) ver = "יש עדכון";
                 else
                 {
                     int cmp = Core.CompareToCurrent(info.Version);
                     current = cmp == 0 || cmp == 1;
-                    ver = cmp == -1 ? info.Version + " · אפשר לעדכן" : info.Version;
+                    ver = cmp == -1 ? "יש עדכון" : info.Version;
                 }
                 chip.Text = "מותקן: " + name + " · " + ver;
                 chip.Kind = current ? LabelKind.Ok : LabelKind.Warn;
@@ -1050,6 +1072,7 @@ namespace OtzariaDict
                 if (info.Compose) cardComp.Selected = true;
             }
             bool repeatOff = Stamp.ReadRepeatOff();
+            btnRepeat.Text = repeatOff ? "החזר סימון כפולות" : "מילים כפולות";   // the button says which way it works now (as in 3.0)
             if (tips != null) tips.SetToolTip(btnRepeat, repeatOff ? "וורד לא מסמן עכשיו מילים כפולות. לחיצה מחזירה את הסימון."
                                                                    : "שוורד יפסיק לסמן כשגיאה מילה שחוזרת פעמיים ברצף (\"לא לא\")");
             UpdateSummary();
@@ -1991,6 +2014,10 @@ namespace OtzariaDict
                 Check(fa.Ok && fullWord.Added.Contains(main), "before Word starts the old entries go, and Word takes the dictionary (" + fa.Title + ")");
                 Check(string.Join(" ", wordList().ToArray()) == "1:RoamingCustom.dic 2:Milon_Torani.dic", "the list: the person's dictionary, ours moved up to 2 (" + string.Join(" ", wordList().ToArray()) + ")");
                 Check(fullWord.Added.Contains(roamPath), "the person's Office dictionary, not in use, is put back into use");
+                // (3.1 review) it is put back before the default dictionary is chosen: it is the default, not a new empty CUSTOM.DIC
+                Check(fullWord.Dicts.ActiveCustomDictionary != null && fullWord.Dicts.ActiveCustomDictionary.Name == "RoamingCustom.dic"
+                      && !fullWord.Added.Exists(delegate (string p) { return string.Equals(Path.GetFileName(p), "CUSTOM.DIC", StringComparison.OrdinalIgnoreCase); }),
+                      "Word's default dictionary is the person's Office dictionary (" + (fullWord.Dicts.ActiveCustomDictionary == null ? "none" : fullWord.Dicts.ActiveCustomDictionary.Name) + ")");
 
                 // b. the list is full of the person's own dictionaries and ours: ours goes too, and a new hidden Word takes the dictionary
                 setList(new string[] { roamPath, "Own1.dic", "Own2.dic", "Own3.dic", "Own4.dic", "Own5.dic", "Own6.dic", "Own7.dic", "Own8.dic", Core.MainFile });
@@ -2007,6 +2034,57 @@ namespace OtzariaDict
                 FakeApp open = new FakeApp(); open.Dicts.FailAdd = true;
                 InstallWithFakeWord(open, true, null);
                 Check(string.Join(" ", wordList().ToArray()) == "1:RoamingCustom.dic 2:Milon_Torani.dic", "Word was open: our entry stays in the list (" + string.Join(" ", wordList().ToArray()) + ")");
+
+                // d. (3.1 review) the list exactly as on the user's computer, with what is outside the account too: Office's "1_state" and
+                //    "1_external", and "11" = our file (an older version's registry route). The clean must not move "11" to "1", and
+                //    "remove from Word" must not take the person's "1_<account>" (RoamingCustom.dic) or Office's settings with it.
+                string[] nineEleven = { roamPath, "Otzaria_Torah_Basic.dic", "Otzaria_Torah_Acronyms.dic", Core.MainFile, Path.Combine(dir, "wordcheck_trial.dic"),
+                    "Milon_SizeTest_175000.dic", "Milon_SizeTest_200000.dic", "Milon_SizeTest_250000.dic", "Milon_SizeTest_300000.dic", "Milon_SizeTest_400000.dic" };
+                setList(nineEleven);
+                using (Microsoft.Win32.RegistryKey k = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(RegFallback.KeyPath, true))
+                {
+                    k.SetValue("1_state", new byte[] { 1, 0, 0, 0 }, Microsoft.Win32.RegistryValueKind.Binary);
+                    k.SetValue("1_external", new byte[] { 0, 0, 0, 0 }, Microsoft.Win32.RegistryValueKind.Binary);
+                    k.SetValue("11", main, Microsoft.Win32.RegistryValueKind.String);
+                }
+                Func<string, object> val = delegate (string name)
+                {
+                    using (Microsoft.Win32.RegistryKey k = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(RegFallback.KeyPath)) return k == null ? null : k.GetValue(name);
+                };
+                FakeApp fullWord4 = new FakeApp(); fullWord4.Dicts.FailAddWhen = full;
+                FakeApp checkD = new FakeApp(); checkD.InEffect = true; checkD.Known = basicWords;
+                Result fd = InstallWithFakeWord(fullWord4, false, checkD);
+                Check(fd.Ok && val("11") != null && val("1") == null, "the entry without an account is not moved (" + fd.Title + ")");
+                Installer.Remove(false);
+                Check(roamPath.Equals(val("1_" + acct)) && val("1_" + acct + "_state") != null && val("1_" + acct + "_roamed") != null && val("1_" + acct + "_external") != null,
+                      "remove from Word: the person's Office dictionary stays in Word's list, with its settings");
+                Check(val("1_state") != null && val("1_external") != null && val("11") == null, "remove from Word: our old entry goes, Office's own settings stay");
+
+                // e. (3.1 review) a Word still runs (also our own one that is still closing): Word's list is not changed at all - that Word
+                //    would write its old copy back
+                setList(nineEleven);
+                int keepWait = WordCom.CloseWaitMs;
+                WordCom.AnyWordHook = delegate { return true; };
+                WordCom.CloseWaitMs = 300;
+                try
+                {
+                    FakeApp fullWord5 = new FakeApp(); fullWord5.Dicts.FailAddWhen = full;
+                    FakeApp checkE = new FakeApp(); checkE.Dicts.FailAddWhen = full; checkE.InEffect = true; checkE.Known = basicWords;
+                    InstallWithFakeWord(fullWord5, false, checkE);
+                }
+                finally { WordCom.AnyWordHook = null; WordCom.CloseWaitMs = keepWait; }
+                Check(wordList().Count == 10 && wordList().Contains("6:Milon_SizeTest_175000.dic"), "a Word still runs: Word's list was not changed (" + wordList().Count + " entries)");
+
+                // f. (3.1 review) closing up the numbers never overwrites: settings that Office left without a file keep their number
+                setList(new string[] { roamPath, "Otzaria_Torah_Basic.dic", "Own1.dic" });
+                using (Microsoft.Win32.RegistryKey k = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(RegFallback.KeyPath, true))
+                {
+                    k.DeleteValue("2_" + acct, false);                                                  // entry 2: only its settings are left
+                    k.SetValue("4_" + acct, "Otzaria_Torah_Basic.dic", Microsoft.Win32.RegistryValueKind.String);   // a stale file at 4
+                    List<string> doneF = DictList.Clean(k, false);
+                    Check(doneF.Count == 1 && doneF[0].StartsWith("deleted 4"), "only the stale entry goes; nothing moves onto the settings left at 2 (" + string.Join("; ", doneF.ToArray()) + ")");
+                    Check(k.GetValue("3_" + acct) as string == "Own1.dic" && k.GetValue("2_" + acct + "_state") != null, "the person's entry 3 and the settings at 2 are where they were");
+                }
                 Microsoft.Win32.Registry.CurrentUser.DeleteSubKeyTree(RegFallback.KeyPath, false);
             }
 

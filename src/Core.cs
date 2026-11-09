@@ -705,6 +705,30 @@ namespace OtzariaDict
 
         // Only for the self-test: a pretend Word in place of a real one.
         public static Func<WordSession> OpenHook, OpenNewHook;
+        // Only for the self-test: whether a Word runs (null = ask Windows), and how long to wait for every Word to close
+        public static Func<bool> AnyWordHook;
+        public static int CloseWaitMs = 15000;
+
+        // true = a Word runs in this session - also one this program started that is still closing - or that cannot be told.
+        // Word's own list of dictionaries in the registry is changed only when this is false: a running Word writes its copy of the list
+        // back when it closes, and the change would be lost.
+        public static bool AnyWordRunning()
+        {
+            if (AnyWordHook != null) return AnyWordHook();
+            int[] ids = WordPids();
+            return ids == null || ids.Length > 0;
+        }
+
+        // waits until no Word runs, at most maxMs; true = none runs now
+        public static bool WaitUntilNoWord(int maxMs)
+        {
+            for (int waited = 0; ; waited += 250)
+            {
+                if (!AnyWordRunning()) { if (waited > 0) Thread.Sleep(300); return true; }   // (a moment for Word to let go of its settings)
+                if (waited >= maxMs) { Core.Log("A Word is still running after " + waited + " ms"); return false; }
+                Thread.Sleep(250);
+            }
+        }
 
         // How many Word processes are running now, visible or hidden (a Word that this program started itself is not counted).
         // -1 = cannot be told. A running Word cannot show a dictionary that was added to it: it reads its list when it starts.
@@ -967,12 +991,16 @@ namespace OtzariaDict
             return int.TryParse(head, NumberStyles.None, CultureInfo.InvariantCulture, out n) ? n : -1;
         }
 
-        // an entry goes together with its settings, so that a later entry with the same number does not inherit them
+        // An entry goes together with its own settings, so that a later entry with the same number does not inherit them - by their exact
+        // names only. Never by the prefix "<n>_": that would also hit Word 365's entry "<n>_16_..._LiveId" of another dictionary (3.1 review:
+        // with "1_" it deleted the person's own RoamingCustom.dic from Word's list).
+        static readonly string[] SettingSuffixes = { "_state", "_roamed", "_external", "_culturetag" };
         static void DeleteEntry(RegistryKey k, string vn)
         {
             k.DeleteValue(vn, false);
             foreach (string other in k.GetValueNames())
-                if (other.StartsWith(vn + "_", StringComparison.OrdinalIgnoreCase)) k.DeleteValue(other, false);
+                foreach (string s in SettingSuffixes)
+                    if (string.Equals(other, vn + s, StringComparison.OrdinalIgnoreCase)) k.DeleteValue(other, false);
         }
 
         static string Leaf(string path)
@@ -1087,8 +1115,8 @@ namespace OtzariaDict
             if (rest.Length == 0) { isMain = true; return true; }
             foreach (string st in SettingNames)
             {
-                if (rest == st) return true;
-                if (rest.EndsWith("_" + st, StringComparison.Ordinal)) { identity = rest.Substring(0, rest.Length - st.Length - 1); return true; }
+                if (string.Equals(rest, st, StringComparison.OrdinalIgnoreCase)) return true;
+                if (rest.EndsWith("_" + st, StringComparison.OrdinalIgnoreCase)) { identity = rest.Substring(0, rest.Length - st.Length - 1); return true; }
             }
             identity = rest;
             isMain = true;
@@ -1097,7 +1125,7 @@ namespace OtzariaDict
 
         public static List<DictEntry> Read(RegistryKey k)
         {
-            Dictionary<string, DictEntry> by = new Dictionary<string, DictEntry>(StringComparer.Ordinal);
+            Dictionary<string, DictEntry> by = new Dictionary<string, DictEntry>(StringComparer.OrdinalIgnoreCase);
             List<DictEntry> list = new List<DictEntry>();
             foreach (string vn in k.GetValueNames())
             {
@@ -1124,12 +1152,15 @@ namespace OtzariaDict
                 || (leaf.StartsWith("wordcheck", StringComparison.OrdinalIgnoreCase) && leaf.EndsWith(".dic", StringComparison.OrdinalIgnoreCase));
         }
 
-        static void Rename(RegistryKey k, string from, string to)
+        // a value is moved to a free name only: an existing value is never overwritten
+        static bool Rename(RegistryKey k, string from, string to)
         {
+            if (k.GetValue(to, null, RegistryValueOptions.DoNotExpandEnvironmentNames) != null) return false;
             object v = k.GetValue(from, null, RegistryValueOptions.DoNotExpandEnvironmentNames);
             RegistryValueKind kind = k.GetValueKind(from);
             k.SetValue(to, v, kind);
             k.DeleteValue(from, false);
+            return true;
         }
 
         // deletes the stale entries and closes up the numbers; returns what was done, one line each
@@ -1143,26 +1174,39 @@ namespace OtzariaDict
                 done.Add("deleted " + e.Number + (e.Identity.Length > 0 ? " (" + e.Identity + ")" : "") + " " + e.File);
             }
             if (done.Count == 0) return done;
-            // entries are moved down in order, so the number an entry moves to is always free
-            Dictionary<string, List<DictEntry>> byId = new Dictionary<string, List<DictEntry>>(StringComparer.Ordinal);
+            // The numbers of each account's list are closed up, as Word writes them. An entry only moves DOWN, and only to a number that no
+            // value of that account uses (settings that Office left without a file keep their number). Entries without an account (older
+            // Office; Word 365 ignores them) are never moved: a moved one could take the number of an account's entry ("11" -> "1" next to
+            // "1_16_..._LiveId"), and older versions removed an entry "<n>" together with every value named "<n>_...".
+            Dictionary<string, List<DictEntry>> byId = new Dictionary<string, List<DictEntry>>(StringComparer.OrdinalIgnoreCase);
             foreach (DictEntry e in Read(k))
             {
-                if (e.Main == null) continue;   // settings without a file (left by Office itself): not touched
+                if (e.Identity.Length == 0) continue;
                 List<DictEntry> l;
                 if (!byId.TryGetValue(e.Identity, out l)) { l = new List<DictEntry>(); byId[e.Identity] = l; }
                 l.Add(e);
             }
             foreach (KeyValuePair<string, List<DictEntry>> kv in byId)
             {
-                kv.Value.Sort(delegate (DictEntry a, DictEntry b) { return a.Number.CompareTo(b.Number); });
-                for (int i = 0; i < kv.Value.Count; i++)
+                HashSet<int> used = new HashSet<int>();
+                int lowest = 1;
+                foreach (DictEntry e in kv.Value) { used.Add(e.Number); if (e.Number < lowest) lowest = e.Number; }   // (a list that starts at 0 keeps 0)
+                List<DictEntry> files = kv.Value.FindAll(delegate (DictEntry e) { return e.Main != null; });
+                files.Sort(delegate (DictEntry a, DictEntry b) { return a.Number.CompareTo(b.Number); });
+                foreach (DictEntry e in files)
                 {
-                    DictEntry e = kv.Value[i];
-                    int want = i + 1;
-                    if (e.Number == want) continue;
+                    int want = lowest;
+                    while (want < e.Number && used.Contains(want)) want++;
+                    if (want >= e.Number) continue;
                     string oldHead = e.Number.ToString(CultureInfo.InvariantCulture), newHead = want.ToString(CultureInfo.InvariantCulture);
+                    // every value of the entry ("<n>_<account>", "<n>_<account>_state" ...) moves, or none does
+                    bool free = true;
+                    foreach (string vn in e.Names)
+                        if (k.GetValue(newHead + vn.Substring(oldHead.Length), null, RegistryValueOptions.DoNotExpandEnvironmentNames) != null) free = false;
+                    if (!free) { done.Add("not moved (a name is taken) " + e.Number + " -> " + want + " (" + e.Identity + ") " + e.File); continue; }
                     foreach (string vn in e.Names) Rename(k, vn, newHead + vn.Substring(oldHead.Length));
-                    done.Add("moved " + e.Number + " -> " + want + (e.Identity.Length > 0 ? " (" + e.Identity + ")" : "") + " " + e.File);
+                    done.Add("moved " + e.Number + " -> " + want + " (" + e.Identity + ") " + e.File);
+                    used.Remove(e.Number); used.Add(want);
                     e.Number = want;
                 }
             }
@@ -1259,7 +1303,8 @@ namespace OtzariaDict
             {
                 // entries of files that are never needed again fill Word's list (it takes no dictionary at all when it holds 10): they go,
                 // but only while no Word runs - a running Word would write its own copy of the list back
-                if (WordCom.RunningWordCount() == 0) DictList.CleanStale(false, "before the installation");
+                if (!WordCom.AnyWordRunning()) DictList.CleanStale(false, "before the installation");
+                else Core.Log("A Word is running: Word's list is not cleaned before the installation");
                 progress(15, "מתחבר לוורד (בפעם הראשונה זה יכול לקחת כמה שניות)…");
                 try { ws = WordCom.Open(); res.WordWasOpen = !ws.Created; }
                 catch (WordMissingException) { wordMissing = true; Core.Log("Word missing"); }
@@ -1370,22 +1415,29 @@ namespace OtzariaDict
                         try
                         {
                             ws.Dispose(); ws = null;
-                            if (!WordCom.WaitForOurWordsToExit(8000)) Thread.Sleep(1500);
-                            DictList.CleanStale(true, "Word refused the dictionary");
-                            ws = WordCom.OpenNew();
-                            try { WordCom.RemoveOurs(ws); } catch (Exception) { }
-                            WordCom.Add(ws, mainPath);
-                            registered = true;
-                            comProblem = null;
-                            Core.Log("Word took the dictionary after its list was cleaned");
+                            WordCom.WaitForOurWordsToExit(8000);
+                            // the list is changed only when no Word at all runs any more - ours included
+                            if (!WordCom.WaitUntilNoWord(WordCom.CloseWaitMs))
+                                Core.Log("Word's list is not cleaned: a Word is still running, and it would write its old list back");
+                            else
+                            {
+                                DictList.CleanStale(true, "Word refused the dictionary");
+                                ws = WordCom.OpenNew();
+                                try { WordCom.RemoveOurs(ws); } catch (Exception) { }
+                                WordCom.Add(ws, mainPath);
+                                registered = true;
+                                comProblem = null;
+                                Core.Log("Word took the dictionary after its list was cleaned");
+                            }
                         }
                         catch (Exception ex3) { comProblem = Core.Msg(ex3); Core.Log("Word add failed after the list was cleaned: " + comProblem); }
                     }
                     Core.Log("timing: dictionary written and added to Word after " + sw.ElapsedMilliseconds + " ms");
                     if (registered)
                     {
-                        WordCom.KeepOursNotDefault(ws, dir);
+                        // the person's Office dictionary first: then it, and not a new empty CUSTOM.DIC, becomes Word's default dictionary
                         ReEnableRoaming(ws);
+                        WordCom.KeepOursNotDefault(ws, dir);
                         RegFallback.DumpToLog("right after Word added the dictionary");
                     }
                 }
@@ -2387,16 +2439,26 @@ namespace OtzariaDict
                 req.Headers["Authorization"] = "Bearer " + token;
                 req.Headers["X-GitHub-Api-Version"] = "2022-11-28";
                 req.Timeout = 30000;
+                req.AllowAutoRedirect = false;   // a page of an internet filter on the way is not GitHub's answer
                 byte[] data = new UTF8Encoding(false).GetBytes(Json(title, body));
                 req.ContentLength = data.Length;
                 using (Stream s = req.GetRequestStream()) s.Write(data, 0, data.Length);
                 string text;
+                HttpStatusCode code;
                 using (HttpWebResponse resp = (HttpWebResponse)req.GetResponse())
-                using (StreamReader r = new StreamReader(resp.GetResponseStream(), Encoding.UTF8)) text = r.ReadToEnd();
+                using (StreamReader r = new StreamReader(resp.GetResponseStream(), Encoding.UTF8)) { code = resp.StatusCode; text = r.ReadToEnd(); }
                 Match m = Regex.Match(text, "\"number\"\\s*:\\s*(\\d+)");
-                if (m.Success) number = int.Parse(m.Groups[1].Value, CultureInfo.InvariantCulture);
+                if (m.Success) int.TryParse(m.Groups[1].Value, NumberStyles.None, CultureInfo.InvariantCulture, out number);
                 Match u = Regex.Match(text, "\"html_url\"\\s*:\\s*\"(https://github\\.com/[^\"]+/issues/\\d+)\"");
                 if (u.Success) address = u.Groups[1].Value;
+                // sent = GitHub created the issue (201) and said its number; any other answer (e.g. a filter's page) is not "sent"
+                if (code != HttpStatusCode.Created || number <= 0)
+                {
+                    error = "תשובה לא צפויה (" + (int)code + ")";
+                    Core.Log("Sending the suggestion: unexpected answer " + (int)code + " (" + text.Length + " characters, " + (m.Success ? "with" : "no") + " issue number)");
+                    number = 0; address = null;
+                    return false;
+                }
                 Core.Log("Suggestion sent: issue #" + number);
                 return true;
             }

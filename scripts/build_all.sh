@@ -9,6 +9,13 @@ ROOT=$(cd "$(dirname "$0")/.." && pwd)
 B="$ROOT/build"
 EXE_NAME="Milon-Torani-3.1.exe"
 OLD_NAME="Milon-Torani-3.0.exe"   # links to the 3.0 download (README of 3.0, posts) keep getting the newest version
+
+# one version everywhere: the program's number (Core.cs), the file's details (UI.cs) and the download name
+APPV=$(grep -oP 'AppVersion = "\K[0-9.]+' "$ROOT/src/Core.cs")
+ASMV=$(grep -oP 'AssemblyVersion\("\K[0-9.]+' "$ROOT/src/UI.cs")
+[ "$APPV" = "$ASMV" ] || { echo "version mismatch: AppVersion $APPV in Core.cs, AssemblyVersion $ASMV in UI.cs"; exit 1; }
+[ "$EXE_NAME" = "Milon-Torani-${APPV%.*.*}.exe" ] || { echo "the download name $EXE_NAME does not match version $APPV"; exit 1; }
+
 rm -rf "$B" "$ROOT/dist"
 mkdir -p "$B" "$ROOT/dist"
 

@@ -20,8 +20,9 @@ Rules:
     - the 796 words of the four books that were only in the extended list move to the basic list, except the words that are in
       the four books only inside verse or page references in parentheses (קוהלת, קיג ...): they stay in extended;
     - a form of the four books goes in when Word marked it, or when no check asked about it and Hspell does not know it - if it
-      has a second witness: at least two of the four copies, or at least 3 occurrences, or a library other than the Otzaria
-      library (which holds the same files as the Otzaria copy). A form of one copy, seen once or twice, with no other witness is
+      has a second witness: at least two of the four copies, or at least 3 occurrences, or another library. The Otzaria and the
+      Sefaria libraries hold the files of their own copies, so a form of one copy counts them only together (then at least one of
+      them is another file) - any other library counts alone. A form of one copy, seen once or twice, with no other witness is
       more likely a typo of that copy;
     - the four-book forms are taken before the cap, so the cap limits only the extended edition;
   - extended: the remaining forms of the libraries (marked, or untested and unknown to Hspell), best first by the red marks each
@@ -33,13 +34,15 @@ Rules:
 rule also sees a quote mark (42 forms like ך"א); the four-book forms come before the cap (before, 2,138 of them were left out by
 it); one rule for a single witness, marked or not (before, 843 marked forms of one copy went in without a second witness); the
 non-final ending rule; the exceptions; references and deleted readings are not four-book text.
+Round 2 of the check: the Sefaria library is no second witness alone either (768 forms); six more readings Sefaria marks as
+deleted; the typos are matched with prefixes too (ויהוידיב).
 """
 import itertools
 import os
 import re
 import sys
 
-sys.path.insert(0, '/home/claude/work/scripts')
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))   # hs.py next to this file (python3 -I leaves the script's folder out)
 from hs import hspell_flags  # noqa: E402
 
 repo, st5, target, rec = sys.argv[1], sys.argv[2], int(sys.argv[3]), sys.argv[4]
@@ -76,13 +79,18 @@ PREFIX = 'והבכלמשד'
 ALWAYS = re.compile('^[' + PREFIX + ']{0,2}(לםרבה|ייי\'?)$')
 
 # found by the independent check in its sample: typos of one copy (לככריז ...), a ד/ר slip (יהוידיב for יהויריב), a ח read as ת
-TYPOS = {'לככריז', 'תעבדיבה', 'מאלהיהו', 'גגפן', 'והתננן', 'אשכ', 'איסת', 'יהוידיב', 'בכתומ', 'האתרונים'}
+TYPOS = {'לככריז', 'תעבדיבה', 'מאלהיהו', 'גגפן', 'והתננן', 'אשכ', 'איסת', 'יהוידיב', 'בכתומ', 'האתרונים', 'אריל', 'אלאא', 'ועוהב'}
 # in the four books only inside references in parentheses (the Mechon Mamre copies print "(תהילים קיג)"): stay in extended
 REFERENCES = {'קוהלת', 'דנייאל', 'קיג', 'קז', 'קכב', 'קיח', 'קכט', 'קה', 'קיז', 'קכד', 'קכג', 'קסב', 'קסז'}
 # not the text of the four books: readings Sefaria's editors mark as deleted (<...>), a scribe's colophon at the end of the Yerushalmi
-NOT_TEXT = REFERENCES | {'איצטלי', 'דאתאמר', 'והחיטין', 'חנילא', 'דוקניות'}
+NOT_TEXT = REFERENCES | {'איצטלי', 'דאתאמר', 'והחיטין', 'חנילא', 'דוקניות', 'ווסי', 'כורב', 'דספלני', "דתאני'", 'מידחקה', 'סיבוכא'}
 
 have = set(basic) | set(more) | acro | comp
+
+
+def typo(w):
+    """a typo of the list, also with one or two prefix letters before it (ויהוידיב)"""
+    return w in TYPOS or (len(w) > 1 and w[0] in PREFIX and w[1:] in TYPOS) or (len(w) > 2 and w[0] in PREFIX and w[1] in PREFIX and w[2:] in TYPOS)
 # a prefix before a word with a doubled letter, named by the independent check (most other forms of this shape are typos:
 # בבבית, דדדוקא, מממה)
 DOUBLED = {'מממוניה', 'מממון', "מממונ'", 'מממרא'}
@@ -122,7 +130,7 @@ with open(os.path.join(st5, 'candidates.tsv'), encoding='utf-8') as f:
         cand_rows.append(line.rstrip('\n').split('\t'))
 lib = {}      # form -> (score, sources, files, status, occurrences, in the four books, a witness besides the Otzaria copy)
 for w, st, src, occ, files, hk, ch, onlynew, names in cand_rows:
-    if ch == '1' or w in have or w in TYPOS or not no_fragment(w):
+    if ch == '1' or w in have or typo(w) or not no_fragment(w):
         continue
     if st == 'marked':
         p = 1.0
@@ -132,11 +140,13 @@ for w, st, src, occ, files, hk, ch, onlynew, names in cand_rows:
         continue
     srcs = set(names.split(','))
     four = 'four' in srcs and w not in NOT_TEXT
-    lib[w] = (int(occ) * p, int(src), int(files), st, int(occ), four, len(srcs - {'four', 'library'}) > 0)
+    others = srcs - {'four'}
+    witness = len(others - {'library', 'sefaria'}) > 0 or {'library', 'sefaria'} <= others
+    lib[w] = (int(occ) * p, int(src), int(files), st, int(occ), four, witness)
 
 add_basic = []      # (form, how, copies, occurrences)
 for w, status, copies, occ, books in rows:
-    if w in have or w in TYPOS or w in NOT_TEXT or not no_fragment(w):
+    if w in have or typo(w) or w in NOT_TEXT or not no_fragment(w):
         continue
     evidence = status == 'marked' or (status == 'untested' and not hs[w])
     if not evidence:
