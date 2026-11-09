@@ -4,13 +4,17 @@ for an exact number, only up to a total of 300,000 words for the biggest edition
 marked it, or when no check asked about it and Hspell does not know it either (82% of such forms were marked before). A form Word
 knows anyway costs only a place in the file.
 
-usage: python3 -I build_lists_v2.py <repo> <stage5 folder> <minimum occurrences> <out folder for the record> [<sources.txt>]
+usage: python3 -I build_lists_v2.py <repo> <stage5 folder> <minimum occurrences> <out folder for the record> [<sources.txt> [<recount folder> [<earlier list>]]]
   The lists in <repo>/data must be those of 3.0 (the starting point). Writes <repo>/data/basic_list.txt and
   <repo>/data/extended_only_list.txt (sorted, one word per line, as before), <repo>/data/retired_list.txt (the words of 3.0
   that leave, for Core.Retired) and, for the record, added_basic.tsv / added_extended.tsv / moved_to_basic.txt / retired.tsv
   and a summary on stdout.
   sources.txt: the scan of where every word of the lists appears (tools/sources, merge_sources.py output; its "total" column
   is the number of occurrences in all the libraries together).
+  recount folder: the out_*.tsv files of tools/sources/recount.py - how often each word appears AS WRITTEN in all the text
+  (footnotes and headings too); added up here.
+  earlier list: the extended list of a test build that the user may have installed (3.1 of 9-11 morning, faf687f): its words
+  that the new lists do not have go to retired_list.txt too, so that an update does not keep them as the person's words.
 
 Rules:
   - a whole form (the user, 3-11: no fragments): at least 3 letters, or at least 2 letters with a quote mark (" or ': an
@@ -37,7 +41,13 @@ Rules:
   - the words of the extended list of 3.0 (most of them from the 2017 dictionary, version 2.0) follow the same rule as the new
     ones once the sources scan is given: a word that all the libraries together have fewer than <minimum occurrences> times
     leaves (9-11, the sources scan: 8,123 of them appear nowhere, 2,921 once or twice - most are typos or two words run
-    together: ישמעאחורבן, נחלתתם). They go to retired_list.txt, so that an update does not keep them as the person's words.
+    together: ישמעאחורבן, נחלתתם). They go to retired_list.txt, so that an update does not keep them as the person's words;
+  - with the recount (the 4th independent check, 9-11 evening): "at least <minimum occurrences> times" means AS WRITTEN, in all
+    the text (also footnotes and headings), for the new words and the words of 3.0 alike - the scans count the main text only,
+    and through tokens.norm_token, which joins a word across an inner quote mark (ז"לכי was counted as the form זלכי). A word of
+    3.0 also needs at least one place in the main text (the window shows it). The readings that are not the four books' text
+    (NOT_TEXT, except the references) stay out of the extended edition too (ווסי and כורב are typos that Sefaria's editors
+    correct).
 
 3.1 changes after the independent check of the categories (9-11, /home/claude/verify/category_report.md): the final-letter
 rule also sees a quote mark (42 forms like ך"א); the four-book forms come before the cap (before, 2,138 of them were left out by
@@ -56,6 +66,17 @@ from hs import hspell_flags  # noqa: E402
 
 repo, st5, min_occ, rec = sys.argv[1], sys.argv[2], int(sys.argv[3]), sys.argv[4]
 sources = sys.argv[5] if len(sys.argv) > 5 else None
+recount_dir = sys.argv[6] if len(sys.argv) > 6 else None
+earlier = sys.argv[7] if len(sys.argv) > 7 else None
+written = None    # word -> how often it appears as written, in all the text (recount.py)
+if recount_dir:
+    written = {}
+    for name in sorted(os.listdir(recount_dir)):
+        if name.startswith('out_') and name.endswith('.tsv'):
+            with open(os.path.join(recount_dir, name), encoding='utf-8') as f:
+                for line in f:
+                    w, n = line.rstrip('\n').split('\t')
+                    written[w] = written.get(w, 0) + int(n)
 os.makedirs(rec, exist_ok=True)
 
 
@@ -182,7 +203,11 @@ def total(b, m):
 # extended: the forms that are not four-book forms, best first, every one seen at least min_occ times
 cands = sorted(((r[0], r[1], r[2], w, r[3], r[4]) for w, r in lib.items() if not r[5] and w not in basic_set),
                key=lambda r: (-r[0], -r[1], -r[2], r[3]))
-chosen = [r for r in cands if r[5] >= min_occ]
+chosen = [r for r in cands if r[5] >= min_occ and r[3] not in NOT_TEXT]
+not_written = []
+if written is not None:
+    not_written = [r for r in chosen if written.get(r[3], 0) < min_occ]   # (mostly forms made by joining across a quote mark)
+    chosen = [r for r in chosen if written.get(r[3], 0) >= min_occ]
 more_set |= set(r[3] for r in chosen)
 
 # the words of 3.0's extended list: the same rule, by the sources scan (the number of occurrences in all the libraries together)
@@ -197,7 +222,10 @@ if sources:
             w, t, _ = line.split('\t', 2)
             totals[w] = int(t)
     old_more = set(more) - set(moved)
-    retired = sorted(w for w in old_more if totals.get(w, 0) < min_occ and w not in basic_set)
+    if written is None:
+        retired = sorted(w for w in old_more if totals.get(w, 0) < min_occ and w not in basic_set)
+    else:   # as written, in all the text; and at least one place in the main text
+        retired = sorted(w for w in old_more if (written.get(w, 0) < min_occ or totals.get(w, 0) == 0) and w not in basic_set)
     more_set -= set(retired)
     new_more = more_set - old_more
     assert all(totals.get(w, 0) >= min_occ for w in new_more), 'a new word of the extended list is missing from the sources scan'
@@ -223,12 +251,23 @@ with open(os.path.join(repo, 'data/retired_list.txt'), 'w', encoding='utf-8', ne
     f.write(''.join(w + '\n' for w in retired))
 if sources:
     with open(os.path.join(rec, 'retired.tsv'), 'w', encoding='utf-8', newline='\n') as f:
-        f.write('word\toccurrences\n')
+        f.write('word\toccurrences (scan)\tas written (recount)\n')
         for w in retired:
-            f.write('%s\t%d\n' % (w, totals.get(w, 0)))
+            f.write('%s\t%d\t%s\n' % (w, totals.get(w, 0), written.get(w, 0) if written is not None else ''))
+if written is not None:
+    with open(os.path.join(rec, 'not_written.tsv'), 'w', encoding='utf-8', newline='\n') as f:
+        f.write('word\toccurrences (stage 5)\tas written (recount)\n')
+        for r in not_written:
+            f.write('%s\t%d\t%d\n' % (r[3], r[5], written.get(r[3], 0)))
 
 lost = (set(basic) | set(more)) - (set(basic_new) | set(more_new))
 assert lost == set(retired), 'only the retired words may leave (%d left, %d retired)' % (len(lost), len(retired))
+test_left = []
+if earlier:   # the words of the test build that the final lists do not have
+    test_left = sorted(set(read_words(earlier)) - set(basic_new) - set(more_new) - set(retired))
+    with open(os.path.join(repo, 'data/retired_list.txt'), 'w', encoding='utf-8', newline='\n') as f:
+        f.write(''.join(w + '\n' for w in sorted(set(retired) | set(test_left))))
+    print('words of the test build that left too (in retired_list.txt): %d' % len(test_left))
 via_lib = sum(1 for r in add_basic if r[1].endswith('+libraries'))
 print('moved from extended to basic: %d (%d stay in extended: in the four books only inside references)' % (
     len(moved), len([w for w in moved_all if w in NOT_TEXT and w in set(more)])))
@@ -242,5 +281,8 @@ print('lists: basic_list.txt %d lines, extended_only_list.txt %d lines; old word
       'none in the libraries %d, once or twice %d)' % (len(basic_new), len(more_new), len(lost),
                                                        sum(1 for w in retired if totals.get(w, 0) == 0) if sources else 0,
                                                        sum(1 for w in retired if totals.get(w, 0) > 0) if sources else 0))
+if written is not None:
+    print('new forms left out because they do not appear %d times as written: %d; words of 3.0 kept thanks to the recount: %d' % (
+        min_occ, len(not_written), sum(1 for w in set(more) - set(moved) if totals.get(w, 0) < min_occ and w not in retired)))
 print('kept by the exceptions: ' + ' '.join(sorted(w for w in (set(basic_new) | set(more_new)) - (set(basic) | set(more))
                                                    if ALWAYS.match(w) or THRICE.search(w))[:30]))

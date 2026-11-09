@@ -1,7 +1,9 @@
 """Where does each word of the dictionary appear? (3.1, 9-11-2026: the user wants the source of every word next to it in the
 word-editing window, because the online libraries are full of typos.)
 
-usage: python3 -I scan_sources.py <targets.txt> <list.tsv> <out.tsv>
+usage: python3 -I scan_sources.py [--raw] <targets.txt> <list.tsv> <out.tsv>
+  --raw: a word is matched as written (only ׳ ״ read as ' "), not through tokens.norm_token - for the words that norm_token
+         can never produce, with a geresh inside (פלאג'י, הוי'ה); see recount.py
   targets.txt: the words of the dictionary, one per line
   list.tsv:    the files to scan, in order of priority: repo <TAB> path <TAB> kind <TAB> collection <TAB> library <TAB> format
                kind = core (Tanakh / Mishna / Bavli / Yerushalmi: collection = its name) or book (collection = "")
@@ -23,7 +25,11 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))   # tokens.py next to this file
 import tokens  # noqa: E402
 
-targets_path, list_path, out_path = sys.argv[1], sys.argv[2], sys.argv[3]
+args = sys.argv[1:]
+RAW = args[:1] == ['--raw']
+if RAW:
+    args = args[1:]
+targets_path, list_path, out_path = args[0], args[1], args[2]
 targets = set(l.strip() for l in open(targets_path, encoding='utf-8') if l.strip())
 
 RE_H = re.compile(r'^\s*<h([1-6])[^>]*>(.*?)</h\1>', re.S)
@@ -118,7 +124,7 @@ def scan_text(text, book, kind, collection, fmt):
         if not s or not s.strip():
             continue
         line_no += 1
-        toks = [tokens.norm_token(t) for t in tokens.RE_TOKEN.findall(s)]
+        toks = [t.replace('׳', "'").replace('״', '"') if RAW else tokens.norm_token(t) for t in tokens.RE_TOKEN.findall(s)]
         if not toks:
             continue
         label = None
