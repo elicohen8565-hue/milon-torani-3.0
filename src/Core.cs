@@ -304,8 +304,9 @@ namespace OtzariaDict
         // otherwise they would be kept as if the person had added them.
         // alsoOurs = the words that the person added in the program's own editing window (MyWords): they are written by every
         // installation from the person's list, so in the file they are not "added by Word" - one taken back must go, not be kept.
-        // 3.1: 11,044 words of 3.0's extended list that all the scanned libraries together do not have at least 3 times (8,123 of them
-        // nowhere): most are typos of online texts or two words run together. The list is data/retired_list.txt.
+        // 3.1: 11,034 words of 3.0's extended list that all the scanned libraries together do not have at least 3 times as written
+        // (8,111 of them not even once): most are typos of online texts or two words run together; and 626 forms of the morning test
+        // build of 3.1 that the final lists do not have. The list is data/retired_list.txt.
         static string[] retired;
         public static string[] Retired
         {

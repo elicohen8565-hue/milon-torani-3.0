@@ -40,8 +40,8 @@ Rules:
     mark as deleted, a scribe's colophon);
   - the words of the extended list of 3.0 (most of them from the 2017 dictionary, version 2.0) follow the same rule as the new
     ones once the sources scan is given: a word that all the libraries together have fewer than <minimum occurrences> times
-    leaves (9-11, the sources scan: 8,123 of them appear nowhere, 2,921 once or twice - most are typos or two words run
-    together: ישמעאחורבן, נחלתתם). They go to retired_list.txt, so that an update does not keep them as the person's words;
+    leaves (9-11, with the recount below: 11,034 words, 8,111 of them not written even once, 2,921 once or twice - most are
+    typos or two words run together: ישמעאחורבן, נחלתתם). They go to retired_list.txt, so that an update does not keep them as the person's words;
   - with the recount (the 4th independent check, 9-11 evening): "at least <minimum occurrences> times" means AS WRITTEN, in all
     the text (also footnotes and headings), for the new words and the words of 3.0 alike - the scans count the main text only,
     and through tokens.norm_token, which joins a word across an inner quote mark (ז"לכי was counted as the form זלכי). A word of

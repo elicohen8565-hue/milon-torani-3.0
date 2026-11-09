@@ -16,14 +16,19 @@ How it was made (in the developer's workspace; the paths in the scripts are thos
    earlier scan (`tokens.py`). About 25 minutes.
 4. `merge_sources.py --words targets.txt out.txt chunk1 ... chunk6` (in order), then `gzip -n -9`.
 
-Per word: per core collection (Tanakh / Mishna / Bavli / Yerushalmi) the number of occurrences and the first 2 places; the 3
+Per word: per core collection (Tanakh / Mishna / Bavli / Yerushalmi) the number of occurrences and the first 2 places, in one
+copy (Otzaria's; the Sefaria copy only for a word that Otzaria's does not have); the 3
 other books where the word appears most (each with its count and its first place; a book in several files, or its copies in
 several libraries, is one entry); how many other books in all; the total. A place = book, heading (the h2..h6 headings of
 Otzaria, or the section line of Sefaria: "דף ב עמוד א", "פרק ג"), the verse / mishna mark or the line number under the heading,
 and the word number in the line.
 
-The total of each word is also what decides which words of 3.0 stay (tools/stage1/build_lists_v2.py, its 5th argument): a word
-that all the libraries together have fewer than 3 times left the dictionary in 3.1 (data/retired_list.txt).
+A word of 3.0 also needs at least one place here (tools/stage1/build_lists_v2.py, its 5th argument) - the window shows it.
 
-The result of 9-11 (3.1): 626,115 words looked for; 591,186 found (every word of the two lists; the rest are abbreviations and
+The result of 9-11 (3.1): 620,371 words looked for; 585,442 found (every word of the two lists; the rest are abbreviations and
 "chibur torani" forms that the program makes by itself and no book has - the window marks them in grey).
+
+Which words of the extended list stay is decided by recount.py (run_recount.sh): at least 3 times as written, in all the text
+(footnotes and headings too) - the scan above counts the main text through tokens.norm_token, which joins a word across an inner
+quote mark. The words with a geresh inside, which norm_token can never produce (פלאג'י), get their places from
+scan_sources.py --raw (run_scan_raw.sh); merge_sources.py takes those out_raw_*.tsv files after the six out_*.tsv.
