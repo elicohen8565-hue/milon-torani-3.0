@@ -824,8 +824,7 @@ namespace OtzariaDict
                 catch (Exception ex)
                 {
                     Core.Log("Saving the person's changes failed: " + Core.Msg(ex));
-                    MessageBox.Show(this, "לא הצלחתי לשמור את השינויים:\r\n" + Core.Msg(ex), "השמירה לא הצליחה", MessageBoxButtons.OK, MessageBoxIcon.Warning,
-                        MessageBoxDefaultButton.Button1, MessageBoxOptions.RtlReading | MessageBoxOptions.RightAlign);
+                    MsgDialog.Tell(this, "לא הצלחתי לשמור את השינויים:\r\n" + Core.Msg(ex), "השמירה לא הצליחה", MsgKind.Error);
                     return;
                 }
             }
@@ -860,8 +859,8 @@ namespace OtzariaDict
         {
             if (!closingOk && !demo && Dirty && e.CloseReason == CloseReason.UserClosing)
             {
-                DialogResult a = MessageBox.Show(this, "יש שינויים שעוד לא נשמרו.\r\n\r\nלשמור אותם?", "עריכת מילים", MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question,
-                    MessageBoxDefaultButton.Button1, MessageBoxOptions.RtlReading | MessageBoxOptions.RightAlign);
+                DialogResult a = MsgDialog.Show(this, "יש שינויים שעוד לא נשמרו. לשמור אותם לפני הסגירה?", "לשמור את השינויים?", MsgKind.Question,
+                    new string[] { "שמור", "אל תשמור", "ביטול" }, new DialogResult[] { DialogResult.Yes, DialogResult.No, DialogResult.Cancel }, 0, DialogResult.Cancel);
                 if (a == DialogResult.Cancel) { e.Cancel = true; return; }
                 if (a == DialogResult.Yes) { e.Cancel = true; BeginInvoke((MethodInvoker)DoSave); return; }
                 closingOk = true;
@@ -1005,8 +1004,8 @@ namespace OtzariaDict
                         SetEnabled(true);
                         status.Color = Theme.Error;
                         status.Text = "השליחה לא הצליחה.";
-                        DialogResult a = MessageBox.Show(this, "השליחה האוטומטית לא הצליחה (" + error + ").\r\n\r\nאפשר לשלוח את ההצעה דרך אתר גיטהב, אם יש לכם חשבון שם. לפתוח את הדף?",
-                            "שליחת ההצעה", MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button1, MessageBoxOptions.RtlReading | MessageBoxOptions.RightAlign);
+                        DialogResult a = MsgDialog.Show(this, "השליחה האוטומטית לא הצליחה (" + error + ").\r\n\r\nאפשר לשלוח את ההצעה דרך אתר גיטהב, אם יש לכם חשבון שם.",
+                            "השליחה לא הצליחה", MsgKind.Warn, new string[] { "פתח את גיטהב", "לא עכשיו" }, new DialogResult[] { DialogResult.Yes, DialogResult.No }, 0, DialogResult.No);
                         if (a == DialogResult.Yes) OpenBrowser();
                     });
                 }
@@ -1026,8 +1025,7 @@ namespace OtzariaDict
             {
                 try { Clipboard.SetText(body); }
                 catch (Exception ex) { Core.Log("Copying the suggestion failed: " + Core.Msg(ex)); }
-                MessageBox.Show(this, "הרשימה ארוכה, ולכן העתקתי אותה.\r\n\r\nבדף של גיטהב שייפתח עכשיו, מחקו את השורה שבתיבת הטקסט והדביקו במקומה (Ctrl+V).",
-                    "שליחה דרך גיטהב", MessageBoxButtons.OK, MessageBoxIcon.Information, MessageBoxDefaultButton.Button1, MessageBoxOptions.RtlReading | MessageBoxOptions.RightAlign);
+                MsgDialog.Tell(this, "בדף של גיטהב שייפתח עכשיו, מחקו את השורה שבתיבת הטקסט והדביקו במקומה (Ctrl+V).", "הרשימה ארוכה, ולכן העתקתי אותה", MsgKind.Info);
             }
             try
             {
@@ -1039,8 +1037,7 @@ namespace OtzariaDict
             catch (Exception ex)
             {
                 Core.Log("Opening the browser failed: " + Core.Msg(ex));
-                MessageBox.Show(this, "לא הצלחתי לפתוח את הדפדפן:\r\n" + Core.Msg(ex), "שליחה דרך גיטהב", MessageBoxButtons.OK, MessageBoxIcon.Warning,
-                    MessageBoxDefaultButton.Button1, MessageBoxOptions.RtlReading | MessageBoxOptions.RightAlign);
+                MsgDialog.Tell(this, Core.Msg(ex), "לא הצלחתי לפתוח את הדפדפן", MsgKind.Error);
             }
         }
 

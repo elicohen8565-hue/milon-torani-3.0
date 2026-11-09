@@ -215,6 +215,33 @@ namespace OtzariaDict
             if (vcenter) fl |= TextFormatFlags.VerticalCenter;
             TextRenderer.DrawText(g, s, f, r, c, fl);
         }
+
+        // one line on the right, cut with "…" at its end when it does not fit
+        public static void Line(Graphics g, string s, Font f, Color c, Rectangle r)
+        {
+            TextRenderer.DrawText(g, s, f, r, c, TextFormatFlags.RightToLeft | TextFormatFlags.NoPrefix | TextFormatFlags.SingleLine
+                                                 | TextFormatFlags.Right | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+        }
+
+        public static Color MarkColor(MsgKind k)
+        { return k == MsgKind.Ok ? Theme.Ok : k == MsgKind.Warn ? Theme.Warn : k == MsgKind.Error ? Theme.Error : Theme.Primary; }
+
+        // a round mark: a tick (done), "!" (attention, or it did not work), "?" (a question) or "i" (good to know).
+        // glyph = the size of the "!" / "?" / "i" in design units
+        public static void Mark(Graphics g, Rectangle m, MsgKind k, float glyph)
+        {
+            Dot(g, m, MarkColor(k));
+            if (k == MsgKind.Ok)
+            {
+                float s = m.Width / 22f;
+                using (Pen tick = new Pen(Theme.OnPrimary, 2.4f * s))
+                {
+                    tick.StartCap = LineCap.Round; tick.EndCap = LineCap.Round; tick.LineJoin = LineJoin.Round;
+                    g.DrawLines(tick, new PointF[] { new PointF(m.X + 6.0f * s, m.Y + 11.4f * s), new PointF(m.X + 9.5f * s, m.Y + 14.8f * s), new PointF(m.X + 16.0f * s, m.Y + 7.6f * s) });
+                }
+            }
+            else Text(g, k == MsgKind.Question ? "?" : k == MsgKind.Info ? "i" : "!", Theme.F(glyph, true), Theme.OnPrimary, m, true, true);
+        }
     }
 
     class BaseControl : Control
@@ -315,32 +342,35 @@ namespace OtzariaDict
         }
     }
 
-    // the result of the last action, in a light coloured bar with a mark (a tick when it worked, "!" when it did not); empty = nothing shown
+    // the result of the last action, in a light coloured bar with a mark (a tick when it worked, "!" when it did not): its title in bold and
+    // under it the first sentence (the whole text is in the message window that opened with it). Title and text empty = nothing shown.
     class InfoBar : BaseControl
     {
         public bool Ok = true;
-        string text = "";
+        string title = "", text = "";
+        public string Title { get { return title; } set { title = value ?? ""; Invalidate(); } }
         public override string Text { get { return text; } set { text = value ?? ""; Invalidate(); } }
         protected override void OnPaint(PaintEventArgs e)
         {
             Graphics g = e.Graphics;
             g.Clear(Parent != null ? Parent.BackColor : Theme.Window);
-            if (text.Length == 0) return;
+            if (title.Length == 0 && text.Length == 0) return;
             g.SmoothingMode = SmoothingMode.AntiAlias; g.PixelOffsetMode = PixelOffsetMode.Half;
             Gfx.Fill(g, ClientRectangle, Dpi.S(6), Ok ? Theme.OkSoft : Theme.ErrorSoft);
             int m = Dpi.S(18);
-            Rectangle mark = new Rectangle(Width - Dpi.S(14) - m, Dpi.S(14), m, m);
-            Gfx.Dot(g, mark, Ok ? Theme.Ok : Theme.Error);
-            if (Ok)
-                using (Pen tick = new Pen(Theme.OnPrimary, 2f * Dpi.Scale))
-                {
-                    float k = Dpi.Scale;
-                    tick.StartCap = LineCap.Round; tick.EndCap = LineCap.Round; tick.LineJoin = LineJoin.Round;
-                    g.DrawLines(tick, new PointF[] { new PointF(mark.X + 5f * k, mark.Y + 9.5f * k), new PointF(mark.X + 8f * k, mark.Y + 12.3f * k), new PointF(mark.X + 13.2f * k, mark.Y + 6.2f * k) });
-                }
-            else Gfx.Text(g, "!", Theme.F(13, true), Theme.OnPrimary, mark, true, true);
-            Rectangle tr = new Rectangle(Dpi.S(14), Dpi.S(8), mark.X - Dpi.S(10) - Dpi.S(14), Height - Dpi.S(14));
-            Gfx.TextAt(g, text, Theme.F(13.5f, false), Ok ? Theme.OnOk : Theme.OnError, tr, Align.Right, false, true);
+            Rectangle mark = new Rectangle(Width - Dpi.S(14) - m, Dpi.S(title.Length > 0 ? 8 : 14), m, m);
+            Gfx.Mark(g, mark, Ok ? MsgKind.Ok : MsgKind.Error, 13);
+            Color fore = Ok ? Theme.OnOk : Theme.OnError;
+            int left = Dpi.S(14), w = mark.X - Dpi.S(10) - left;
+            if (title.Length == 0)
+                Gfx.TextAt(g, text, Theme.F(13.5f, false), fore, new Rectangle(left, Dpi.S(8), w, Height - Dpi.S(14)), Align.Right, false, true);
+            else
+            {
+                // two lines, each cut with "…" if it is longer than the bar (the mark is centred on the first line)
+                int top = mark.Y + m / 2 - Dpi.S(10);
+                Gfx.Line(g, title, Theme.F(13.5f, true), fore, new Rectangle(left, top, w, Dpi.S(20)));
+                Gfx.Line(g, text, Theme.F(13.5f, false), fore, new Rectangle(left, top + Dpi.S(20), w, Dpi.S(20)));
+            }
         }
     }
 
@@ -671,6 +701,142 @@ namespace OtzariaDict
         }
     }
 
+    // ------------------------------------------------------------------------------------------ a message or a question
+    enum MsgKind { Ok, Info, Warn, Error, Question }
+
+    // the title of a message window: a round mark at its start (on the right), then the text (it may take two lines)
+    class MarkTitle : BaseControl
+    {
+        public MsgKind Kind = MsgKind.Info;
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            Graphics g = e.Graphics;
+            g.Clear(Parent != null ? Parent.BackColor : Theme.Card);
+            g.SmoothingMode = SmoothingMode.AntiAlias; g.PixelOffsetMode = PixelOffsetMode.Half;
+            int mark = Dpi.S(24), gap = Dpi.S(12), line = Dpi.S(32);
+            Rectangle m = new Rectangle(Width - mark, (line - mark) / 2, mark, mark);
+            Gfx.Mark(g, m, Kind, 15);
+            Gfx.TextAt(g, Text, Font, Theme.Text, new Rectangle(0, 0, m.X - gap, Height), Align.Right, Height <= line, true);
+        }
+    }
+
+    // 3.1: a message or a question in the look of the program, instead of the plain message box of Windows - a title with a round mark,
+    // the text, and the buttons (in Hebrew on every Windows) on the light strip at the bottom. The window is as high as its text;
+    // a very long text scrolls. Escape and the close box give the safe answer.
+    class MsgDialog : Form
+    {
+        DialogResult answer;
+        readonly DialogResult escape;
+        static readonly TextFormatFlags Wrap = TextFormatFlags.RightToLeft | TextFormatFlags.NoPrefix | TextFormatFlags.WordBreak | TextFormatFlags.TextBoxControl;
+
+        // labels / answers: the buttons from right to left - the first one is the blue one; focus = the button that has the focus at the start
+        // (Enter presses it); escapeAnswer = the answer of Escape and of the close box
+        MsgDialog(string text, string title, MsgKind kind, string[] labels, DialogResult[] answers, int focus, DialogResult escapeAnswer)
+        {
+            answer = escape = escapeAnswer;
+            Text = MainForm.Title;
+            AutoScaleMode = AutoScaleMode.None;
+            FormBorderStyle = FormBorderStyle.FixedDialog;
+            MaximizeBox = false; MinimizeBox = false; ShowInTaskbar = false;
+            if (Dpi.Forced) { StartPosition = FormStartPosition.Manual; Location = new Point(0, 0); }   // the developer's screenshots
+            else StartPosition = FormStartPosition.CenterParent;
+            BackColor = Theme.Card;
+            Font = Theme.F(14, false);
+            Icon = MainForm.AppIcon();
+            AccessibleName = title;
+            AccessibleDescription = text;
+
+            int width = Dpi.S(520), pad = Dpi.S(28), inner = width - 2 * pad;
+            Font titleFont = Theme.F(20, true), bodyFont = Theme.F(14, false);
+            int titleW = inner - Dpi.S(24) - Dpi.S(12);
+            int titleH = Math.Max(Dpi.S(32), TextRenderer.MeasureText(title, titleFont, new Size(titleW, int.MaxValue), Wrap).Height + Dpi.S(2));
+            MarkTitle head = new MarkTitle { Bounds = new Rectangle(pad, Dpi.S(22), inner, titleH), Kind = kind, Font = titleFont, Text = title };
+
+            // the text: as high as it needs, up to what the screen has room for; beyond that it scrolls
+            int top = head.Bottom + Dpi.S(10);
+            int need = TextRenderer.MeasureText(text, bodyFont, new Size(inner, int.MaxValue), Wrap).Height + Dpi.S(4);
+            int room = Dpi.S(440);
+            try
+            {
+                int frame = SystemInformation.CaptionHeight + 2 * SystemInformation.FixedFrameBorderSize.Height + Dpi.S(16);
+                room = Math.Min(room, Screen.PrimaryScreen.WorkingArea.Height - frame - top - Dpi.S(24 + 76));
+            }
+            catch (Exception) { }
+            room = Math.Max(room, Dpi.S(120));
+            Control body;
+            if (need <= room)
+                body = new TextBlock { Bounds = new Rectangle(pad, top, inner, need), Font = bodyFont, Color = Theme.Text, Text = text };
+            else
+                body = new TextBox
+                {
+                    Bounds = new Rectangle(pad, top, inner, room), Multiline = true, ReadOnly = true, ScrollBars = ScrollBars.Vertical, WordWrap = true,
+                    BorderStyle = BorderStyle.None, BackColor = Theme.Card, ForeColor = Theme.Text, Font = bodyFont, RightToLeft = RightToLeft.Yes,
+                    TabStop = false, Text = text
+                };
+
+            LowerPanel strip = new LowerPanel { Bounds = new Rectangle(0, body.Bottom + Dpi.S(24), width, Dpi.S(76)) };
+            List<FlatBtn> buttons = new List<FlatBtn>();
+            int x = width - pad;
+            for (int i = 0; i < labels.Length; i++)
+            {
+                Font f = Theme.F(i == 0 ? 15 : 14, true);   // the fonts FlatBtn draws them with
+                int w = Math.Max(Dpi.S(110), TextRenderer.MeasureText(labels[i], f).Width + Dpi.S(40));
+                x -= w;
+                FlatBtn b = new FlatBtn { Bounds = new Rectangle(x, Dpi.S(16), w, Dpi.S(44)), Text = labels[i], Style = i == 0 ? BtnStyle.Filled : BtnStyle.Outlined };
+                b.AccessibleName = labels[i];
+                b.AccessibleRole = AccessibleRole.PushButton;
+                DialogResult a = answers[i];
+                b.Click += delegate { answer = a; Close(); };
+                buttons.Add(b);
+                x -= Dpi.S(12);
+            }
+            strip.Controls.AddRange(buttons.ToArray());   // the tab order follows this order (right to left)
+            Controls.AddRange(new Control[] { head, body, strip });
+            ClientSize = new Size(width, strip.Bottom);
+            ActiveControl = buttons[Math.Max(0, Math.Min(focus, buttons.Count - 1))];
+        }
+
+        protected override bool ProcessDialogKey(Keys keyData)
+        {
+            if (keyData == Keys.Escape) { answer = escape; Close(); return true; }
+            return base.ProcessDialogKey(keyData);
+        }
+
+        // the sound of the Windows message box of the same kind
+        static void Sound(MsgKind kind)
+        {
+            if (Environment.OSVersion.Platform != PlatformID.Win32NT) return;
+            try
+            {
+                if (kind == MsgKind.Warn || kind == MsgKind.Error) System.Media.SystemSounds.Exclamation.Play();
+                else if (kind == MsgKind.Ok || kind == MsgKind.Info) System.Media.SystemSounds.Asterisk.Play();
+            }
+            catch (Exception) { }
+        }
+
+        public static DialogResult Show(IWin32Window owner, string text, string title, MsgKind kind, string[] labels, DialogResult[] answers, int focus, DialogResult escapeAnswer)
+        {
+            Sound(kind);
+            using (MsgDialog d = new MsgDialog(text ?? "", title ?? "", kind, labels, answers, focus, escapeAnswer))
+            {
+                if (owner != null) d.ShowDialog(owner); else d.ShowDialog();
+                return d.answer;
+            }
+        }
+
+        // a message with one button
+        public static void Tell(IWin32Window owner, string text, string title, MsgKind kind)
+        {
+            Show(owner, text, title, kind, new string[] { "אישור" }, new DialogResult[] { DialogResult.OK }, 0, DialogResult.OK);
+        }
+
+        // a yes / no question about something that cannot easily be undone: the focus (Enter) starts on "no"
+        public static DialogResult YesNo(IWin32Window owner, string text, string title)
+        {
+            return Show(owner, text, title, MsgKind.Warn, new string[] { "כן", "לא" }, new DialogResult[] { DialogResult.Yes, DialogResult.No }, 1, DialogResult.No);
+        }
+    }
+
     // ------------------------------------------------------------------------------------------ main window
     class MainForm : Form
     {
@@ -792,8 +958,9 @@ namespace OtzariaDict
         public void Preview()
         {
             prog.Value = 100; SetStage("");
-            status.Ok = true;
-            status.Text = "המילון הבסיסי (" + Core.EditionCount(false, false).ToString("N0") + " מילים) נוסף לוורד. עכשיו פתחו את וורד והקלידו מילה תורנית כדי לבדוק.";
+            Result r = new Result();
+            Installer.Describe(r, "המורחב + חיבור תורני", Core.EditionCount(true, true).ToString("N0"), null, 1);
+            status.Ok = r.Ok; status.Title = r.Title; status.Text = Headline(r.Text);
             cardExt.Selected = true; cardBasic.Selected = false; cardComp.Selected = true;
             chip.Text = "מותקן: מורחב + חיבור תורני · " + Core.AppVersion; chip.Kind = LabelKind.Ok;
             UpdateSummary();
@@ -810,7 +977,7 @@ namespace OtzariaDict
             {
                 e.Cancel = true;
                 if (closeWhenDone) return;
-                if (Ask("הפעולה עדיין רצה.\r\n\r\nאם תסגרו עכשיו, החלון ייסגר והפעולה תסתיים ברקע (לכל היותר שתי דקות).\r\n\r\nלסגור?", "הפעולה עדיין רצה") != DialogResult.Yes) return;
+                if (Ask("אם תסגרו עכשיו, החלון ייסגר והפעולה תסתיים ברקע (לכל היותר שתי דקות).\r\n\r\nלסגור?", "הפעולה עדיין רצה") != DialogResult.Yes) return;
                 if (!busy) { e.Cancel = false; base.OnFormClosing(e); return; }   // the action ended while the question was open: close now
                 closeWhenDone = true;
                 Hide();
@@ -908,24 +1075,68 @@ namespace OtzariaDict
 
         DialogResult Ask(string text, string title)
         {
-            return MessageBox.Show(this, text, title, MessageBoxButtons.YesNo, MessageBoxIcon.Warning,
-                MessageBoxDefaultButton.Button2, MessageBoxOptions.RtlReading | MessageBoxOptions.RightAlign);
+            return MsgDialog.YesNo(this, text, title);
         }
 
+        // the result of an action: in a message window, and its title and first sentence stay in the bar of the main window
         void Say(Result r)
         {
             status.Ok = r.Ok;
-            status.Text = r.Text.Replace("\r\n\r\n", "  ").Replace("\r\n", " ");
+            status.Title = r.Title;
+            status.Text = Headline(r.Text);
             prog.Visible = false;
-            MessageBox.Show(this, r.Text, r.Title, MessageBoxButtons.OK, r.Ok ? MessageBoxIcon.Information : MessageBoxIcon.Warning,
-                MessageBoxDefaultButton.Button1, MessageBoxOptions.RtlReading | MessageBoxOptions.RightAlign);
+            MsgDialog.Tell(this, r.Text, r.Title, r.Ok ? MsgKind.Ok : MsgKind.Error);
+        }
+
+        // the first paragraph of a text, in one line
+        internal static string Headline(string text)
+        {
+            if (string.IsNullOrEmpty(text)) return "";
+            int cut = text.IndexOf("\r\n\r\n", StringComparison.Ordinal);
+            return (cut >= 0 ? text.Substring(0, cut) : text).Replace("\r\n", " ").Trim();
+        }
+
+        // for the developer: the message windows with real texts (--preview-msg done | manual | ask | fail | long)
+        public static void PreviewMessage(string which)
+        {
+            Result r = new Result();
+            if (which == "ask")
+            {
+                MsgDialog.YesNo(null, "לא רק את המילון התורני הזה, אלא גם מילונים ומילים שהוספתם בעצמכם (\"הוסף למילון\") או שנוספו על ידי תוכנות אחרות.\r\n\r\n"
+                                      + "יישאר רק המילון המובנה של וורד. לפני המחיקה נשמר עותק גיבוי של הכול.\r\n\r\nלהמשיך?", "ההסרה המתקדמת מוחקת את כל המילונים המותאמים אישית");
+                return;
+            }
+            if (which == "manual")
+            {
+                r.Ok = true; r.Title = "התקנה ידנית";
+                r.Text = "הקבצים נשמרו בתיקייה שנפתחה עכשיו:\r\nC:\\Users\\User\\AppData\\Roaming\\Microsoft\\UProof\r\n\r\n"
+                       + "עכשיו בוורד:\r\n1. קובץ ← אפשרויות ← הגהה\r\n2. לחצו על \"מילונים מותאמים אישית…\"\r\n3. לחצו \"הוספה…\" ובחרו את הקובץ:\r\n   Milon_Torani.dic\r\n"
+                       + "4. אישור, ואם צריך לסגור ולפתוח את וורד מחדש.";
+            }
+            else if (which == "fail")
+            {
+                r.Ok = false; r.Title = "צריך להשלים ידנית";
+                r.Text = "קובץ המילון נשמר, אבל לא הצלחתי לרשום אותו בוורד אוטומטית.\r\n\r\nלחצו על \"התקנה ידנית\" ופעלו לפי ההוראות (לוקח חצי דקה).\r\n\r\n"
+                       + "פרטי השגיאה: Error HRESULT E_FAIL has been returned from a call to a COM component.";
+            }
+            else if (which == "long")
+            {
+                r.Ok = false; r.Title = "המילון הותקן, אבל וורד לא מזהה את כל המילים";
+                System.Text.StringBuilder t = new System.Text.StringBuilder("המילון הבסיסי (69,498 מילים, בקובץ אחד) נוסף לוורד.\r\n\r\n");
+                for (int i = 1; i <= 40; i++) t.Append("שורה " + i + " של טקסט ארוך מאוד, כדי לראות שהחלון לא יוצא מהמסך ושהטקסט נגלל.\r\n");
+                r.Text = t.ToString();
+            }
+            else
+                Installer.Describe(r, "המורחב + חיבור תורני", Core.EditionCount(true, true).ToString("N0"),
+                    "בדיקה אוטומטית בוורד חדש שנפתח לבדיקה: כל 16 מילות הבדיקה מזוהות ✓\r\nמילונים בוורד: CUSTOM.DIC, Milon_Torani.dic, RoamingCustom.dic", 1);
+            MsgDialog.Tell(null, r.Text, r.Title, r.Ok ? MsgKind.Ok : MsgKind.Error);
         }
 
         void Work(Func<Result> job)
         {
             if (busy) return;
             SetBusy(true);
-            status.Text = "";
+            status.Title = ""; status.Text = "";
             prog.Visible = true;
             prog.Value = 2; SetStage("מתחיל…");
             Thread t = new Thread(delegate ()
@@ -1050,7 +1261,7 @@ namespace OtzariaDict
             if (busy || asking) return;
             if (Stamp.ReadRepeatOff())
             {
-                if (Ask("להחזיר את סימון המילים הכפולות בוורד?\r\n\r\nוורד יחזור לסמן כשגיאה מילים שחוזרות פעמיים ברצף.", "החזרת סימון מילים כפולות") != DialogResult.Yes) return;
+                if (Ask("וורד יחזור לסמן כשגיאה מילים שחוזרות פעמיים ברצף.", "להחזיר את סימון המילים הכפולות בוורד?") != DialogResult.Yes) return;
                 Work(delegate { return Installer.SetRepeatedWords(true); });
                 return;
             }
@@ -1126,6 +1337,14 @@ namespace OtzariaDict
                 Application.SetCompatibleTextRenderingDefault(false);
                 if (args[0] == "--preview-words") using (WordsForm f = new WordsForm(true, false, true, true)) { f.Shown += delegate { f.Demo(); }; f.ShowDialog(); }
                 else using (SuggestDialog d = new SuggestDialog(WordsForm.DemoChanges(), "מורחב")) d.ShowDialog();
+                return 0;
+            }
+
+            if (args.Length >= 1 && args[0] == "--preview-msg")   // for the developer: the message windows (done | manual | ask | fail | long)
+            {
+                Application.EnableVisualStyles();
+                Application.SetCompatibleTextRenderingDefault(false);
+                MainForm.PreviewMessage(args.Length >= 2 && !args[1].StartsWith("--", StringComparison.Ordinal) ? args[1] : "done");
                 return 0;
             }
 

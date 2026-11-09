@@ -1500,10 +1500,6 @@ namespace OtzariaDict
             return res;
         }
 
-        // The text after a dictionary was registered in Word. res.WordWasOpen = Word was already running: the check was not made,
-        // and the dictionary will be known to that Word only after it is closed and opened again - never a "does not recognize".
-        // the person's changes applied to the words of the edition; returns the person's own words that may be in our file from before
-        // (null = the person's list could not be read: then the edition is installed as it is, and nothing in the old file is lost)
         // Office's personal dictionary of the person (RoamingCustom.dic: the words they added with "Add to Dictionary") is in Word's list but
         // not in use (on 9-11-2026 it was found so after Word's list had been full): it is put back into use. Never fails the installation.
         static void ReEnableRoaming(WordSession ws)
@@ -1520,6 +1516,8 @@ namespace OtzariaDict
             catch (Exception ex) { Core.Log("The person's Office dictionary could not be put back into use: " + Core.Msg(ex)); }
         }
 
+        // the person's changes applied to the words of the edition; returns the person's own words that may be in our file from before
+        // (null = the person's list could not be read: then the edition is installed as it is, and nothing in the old file is lost)
         static HashSet<string> MyChanges(ref List<string> words, out List<WordChange> mine)
         {
             mine = null;
@@ -1543,6 +1541,8 @@ namespace OtzariaDict
             }
         }
 
+        // The text after a dictionary was registered in Word. res.WordWasOpen = Word was already running: the check was not made,
+        // and the dictionary will be known to that Word only after it is closed and opened again - never a "does not recognize".
         internal static void Describe(Result res, string name, string countText, string check, int verdict)
         {
             string head = "המילון " + name + " (" + countText + " מילים, בקובץ אחד) נוסף לוורד, גרסה " + Core.AppVersion + ".\r\n\r\n";
