@@ -20,8 +20,9 @@ namespace OtzariaDict
     public delegate void IndexFn(int index);
 
     // ------------------------------------------------------------------------------------------ a text box in the look of the window
-    // A plain Windows text box without a border of its own, inside a frame drawn like the rest of the window (blue while it has the focus).
-    // Cue = grey text shown while the box is empty and the focus is elsewhere. Side = small grey text on the left, inside the frame.
+    // A plain Windows text box without a border of its own, inside a white field with rounded corners on the grey of the window (3.1: no
+    // border; a blue ring while it has the focus). Cue = grey text shown while the box is empty and the focus is elsewhere. Side = small
+    // grey text on the left, inside the field.
     // 3.1: a little room inside a text box on both sides, so that the caret at its edge is seen whole (the user: it was half hidden)
     static class TextRoom
     {
@@ -66,6 +67,7 @@ namespace OtzariaDict
             Box.ForeColor = Theme.Text;
             Box.MaxLength = 200;
             TextRoom.Keep(Box);
+            Box.EnabledChanged += delegate { Box.BackColor = Box.Enabled ? Theme.Card : Theme.DisabledBack; };
             Box.TextChanged += delegate { if (!settingText && Changed != null) Changed(this, EventArgs.Empty); };
             Box.GotFocus += delegate { if (showingCue) Put("", false); Invalidate(); };
             Box.LostFocus += delegate { if (Box.Text.Length == 0) Put(cue, true); Invalidate(); };
@@ -120,7 +122,7 @@ namespace OtzariaDict
         protected override void OnLayout(LayoutEventArgs e)
         {
             base.OnLayout(e);
-            int pad = Dpi.S(10);
+            int pad = Dpi.S(13);
             int left = pad + (SideUnits > 0 ? Dpi.S(SideUnits) : 0);
             Box.Bounds = new Rectangle(left, (Height - Box.Height) / 2, Math.Max(10, Width - left - pad), Box.Height);
         }
@@ -128,26 +130,33 @@ namespace OtzariaDict
         protected override void OnPaint(PaintEventArgs e)
         {
             Graphics g = e.Graphics;
-            Gfx.Rect(g, ClientRectangle, Enabled ? Theme.Card : Theme.DisabledBack);
-            bool focused = Box.Focused;
-            Gfx.Frame(g, ClientRectangle, focused ? Theme.Primary : (Enabled ? Theme.Stroke : Theme.DisabledLine), focused ? Math.Max(2, Dpi.S(2)) : Dpi.Hair);
+            g.SmoothingMode = SmoothingMode.AntiAlias; g.PixelOffsetMode = PixelOffsetMode.Half;
+            g.Clear(Parent != null ? Parent.BackColor : Theme.Window);
+            int rad = Dpi.S(12);
+            Gfx.Fill(g, ClientRectangle, rad, Enabled ? Theme.Card : Theme.DisabledBack);
+            if (Box.Focused) Gfx.Ring(g, ClientRectangle, rad, Theme.Primary, Math.Max(2, Dpi.S(2)));
             if (side.Length > 0 && SideUnits > 0)
-                Gfx.TextAt(g, side, Theme.F(13, false), Theme.TextQuiet, new Rectangle(Dpi.S(10), 0, Dpi.S(SideUnits), Height), Align.Left, true, false);
+                Gfx.TextAt(g, side, Theme.F(13, false), Theme.TextQuiet, new Rectangle(Dpi.S(13), 0, Dpi.S(SideUnits), Height), Align.Left, true, false);
         }
     }
 
     // ------------------------------------------------------------------------------------------ a list that scrolls (drawn by hand)
-    // Rows of one height, a frame, a scroll bar on the left (the reading side ends there), the mouse wheel and the keyboard.
+    // A white panel with rounded corners on the grey of the window: rows of one height (the chosen one and the one under the mouse get a
+    // rounded light background), a thin round scroll bar on the left (the reading side ends there), the mouse wheel and the keyboard.
     abstract class ScrollList : BaseControl
     {
         protected readonly int RowUnits;
         // 3.1 (the user: smooth scrolling, like Windows): the list is scrolled by pixels, not by whole rows, and the mouse wheel glides
         protected int offY, sel = -1, hover = -1;
-        protected readonly VScrollBar bar = new VScrollBar();
         public string EmptyText = "";
         public event EventHandler SelectionChanged;
         int goal = -1;                              // where a gliding scroll is going (pixels); -1 = not gliding
         readonly System.Windows.Forms.Timer glide = new System.Windows.Forms.Timer { Interval = 12 };
+        // 3.1 (design B): the scroll bar is drawn too - a thin round thumb, wider and darker under the mouse. It can be dragged, and a
+        // click beside it moves a page.
+        bool barOn, barHover, dragging;
+        int dragFrom, dragOff;                      // where a drag of the thumb began: the mouse, and the list's place then
+        protected bool Dragging { get { return dragging; } }
 
         protected ScrollList(int rowUnits)
         {
@@ -155,9 +164,6 @@ namespace OtzariaDict
             TabStop = true;
             BackColor = Theme.Card;
             DoubleBuffered = true;
-            bar.Visible = false;
-            bar.TabStop = false;
-            bar.Scroll += delegate (object s, ScrollEventArgs e) { goal = -1; glide.Stop(); SetOff(e.NewValue); };   // (Value is set only after Scroll)
             glide.Tick += delegate
             {
                 if (goal < 0) { glide.Stop(); return; }
@@ -166,7 +172,6 @@ namespace OtzariaDict
                 SetOff(offY + step);
                 if (offY == goal) { goal = -1; glide.Stop(); }
             };
-            Controls.Add(bar);
         }
 
         protected override void Dispose(bool disposing) { if (disposing) glide.Dispose(); base.Dispose(disposing); }
@@ -177,12 +182,29 @@ namespace OtzariaDict
         protected virtual bool Locked { get { return false; } }   // (while a row is being edited: nothing moves)
         public int SelectedIndex { get { return sel; } }
         protected int RowPx { get { return Math.Max(1, Dpi.S(RowUnits)); } }
+        int Pad { get { return Dpi.S(6); } }                      // the white margin inside the panel
+        int BarZone { get { return barOn ? Dpi.S(12) : 0; } }     // the place of the scroll bar, on the left
+        // the rows' place: inside the panel's margin, beside the scroll bar
         protected Rectangle Inner
         {
             get
             {
-                int h = Dpi.Hair, bw = bar.Visible ? bar.Width : 0;
-                return new Rectangle(h + bw, h, Math.Max(0, Width - 2 * h - bw), Math.Max(0, Height - 2 * h));
+                int p = Pad, bz = BarZone;
+                return new Rectangle(p + bz, p, Math.Max(0, Width - 2 * p - bz), Math.Max(0, Height - 2 * p));
+            }
+        }
+        Rectangle Track { get { int p = Pad; return new Rectangle(p, p, BarZone, Math.Max(0, Height - 2 * p)); } }
+        // the thumb: as long as the part that is seen, at the place of what is seen
+        Rectangle Thumb
+        {
+            get
+            {
+                Rectangle t = Track;
+                int content = Math.Max(1, Count * RowPx);
+                int h = Math.Min(t.Height, Math.Max(Dpi.S(28), (int)((long)t.Height * Inner.Height / content)));
+                int max = MaxOff;
+                int y = t.Y + (max == 0 ? 0 : (int)((long)(t.Height - h) * offY / max));
+                return new Rectangle(t.X, y, t.Width, h);
             }
         }
         protected int FullRows { get { return Math.Max(1, Inner.Height / RowPx); } }
@@ -208,7 +230,6 @@ namespace OtzariaDict
             v = Math.Max(0, Math.Min(MaxOff, v));
             if (v == offY) return;
             offY = v;
-            if (bar.Visible && bar.Value != v) bar.Value = Math.Min(Math.Max(bar.Minimum, v), bar.Maximum);
             hover = -1;
             Scrolled();
             Invalidate();
@@ -231,21 +252,9 @@ namespace OtzariaDict
 
         void UpdateBar()
         {
-            bool need = Count * RowPx > Height - 2 * Dpi.Hair;
-            int hair = Dpi.Hair;
-            bar.Bounds = new Rectangle(hair, hair, SystemInformation.VerticalScrollBarWidth, Math.Max(0, Height - 2 * hair));
-            bar.Visible = need;
+            barOn = Count * RowPx > Height - 2 * Pad;
+            if (!barOn) { barHover = false; dragging = false; }
             offY = Math.Max(0, Math.Min(offY, MaxOff));
-            if (need)
-            {
-                // in pixels: the thumb is as long as what is seen; one arrow click = one row
-                bar.Value = 0;
-                bar.Minimum = 0;
-                bar.Maximum = Math.Max(0, Count * RowPx - 1);
-                bar.LargeChange = Math.Max(1, Inner.Height);
-                bar.SmallChange = RowPx;
-                bar.Value = Math.Min(offY, bar.Maximum);
-            }
         }
 
         protected override void OnResize(EventArgs e) { base.OnResize(e); UpdateBar(); Invalidate(); }
@@ -273,7 +282,7 @@ namespace OtzariaDict
         // the wheel: three rows a notch (a precise touchpad: in proportion), gliding there in a short moment
         void GlideBy(int px)
         {
-            if (!bar.Visible || Locked) return;
+            if (!barOn || Locked) return;
             goal = Math.Max(0, Math.Min(MaxOff, (goal >= 0 ? goal : offY) + px));
             hover = -1;
             if (!glide.Enabled) glide.Start();
@@ -282,18 +291,52 @@ namespace OtzariaDict
         protected override void OnMouseWheel(MouseEventArgs e) { GlideBy(-e.Delta * 3 * RowPx / 120); base.OnMouseWheel(e); }
         protected override void OnMouseMove(MouseEventArgs e)
         {
+            if (dragging)
+            {
+                // the thumb follows the mouse; the list moves by the same part of its length
+                int room = Track.Height - Thumb.Height;
+                if (room > 0) SetOff(dragOff + (int)((long)(e.Y - dragFrom) * MaxOff / room));
+                base.OnMouseMove(e);
+                return;
+            }
+            bool overBar = barOn && Track.Contains(e.Location);
+            if (overBar != barHover) { barHover = overBar; Invalidate(); }
             int h = Locked ? -1 : RowAt(e.Location);
             if (h != hover) { hover = h; Invalidate(); }
             base.OnMouseMove(e);
         }
-        protected override void OnMouseLeave(EventArgs e) { if (hover != -1) { hover = -1; Invalidate(); } base.OnMouseLeave(e); }
+        protected override void OnMouseLeave(EventArgs e)
+        {
+            bool was = hover != -1 || barHover;
+            hover = -1; barHover = false;
+            if (was) Invalidate();
+            base.OnMouseLeave(e);
+        }
         protected override void OnMouseDown(MouseEventArgs e)
         {
             if (Locked) return;
             Focus();
+            if (barOn && e.Button == MouseButtons.Left && Track.Contains(e.Location))
+            {
+                Rectangle th = Thumb;
+                goal = -1; glide.Stop();
+                if (th.Contains(e.Location)) { dragging = true; dragFrom = e.Y; dragOff = offY; Capture = true; Invalidate(); }
+                else GlideBy(e.Y < th.Y ? -Inner.Height : Inner.Height);   // beside the thumb: a page up or down
+                return;
+            }
             int i = RowAt(e.Location);
             if (i >= 0) Select(i);
             base.OnMouseDown(e);
+        }
+        protected override void OnMouseUp(MouseEventArgs e)
+        {
+            if (dragging) { dragging = false; Capture = false; barHover = barOn && Track.Contains(e.Location); Invalidate(); }
+            base.OnMouseUp(e);
+        }
+        protected override void OnMouseCaptureChanged(EventArgs e)
+        {
+            if (dragging) { dragging = false; Invalidate(); }   // (the capture was taken away, for example by a window that opened)
+            base.OnMouseCaptureChanged(e);
         }
         protected override void OnGotFocus(EventArgs e) { Invalidate(); base.OnGotFocus(e); }
         protected override void OnLostFocus(EventArgs e) { Invalidate(); base.OnLostFocus(e); }
@@ -324,11 +367,20 @@ namespace OtzariaDict
             base.OnKeyDown(e);
         }
 
+        // the light rounded background of the chosen row and of the row under the mouse (the others are the white of the panel)
+        protected static void RowBack(Graphics g, Rectangle r, bool selected, bool hovered)
+        {
+            if (!selected && !hovered) return;
+            Gfx.Fill(g, new Rectangle(r.X, r.Y + Dpi.S(1), r.Width, r.Height - Dpi.S(2)), Dpi.S(10), selected ? Theme.Soft : Theme.RowHover);
+        }
+
         protected override void OnPaint(PaintEventArgs e)
         {
             Graphics g = e.Graphics;
             g.SmoothingMode = SmoothingMode.AntiAlias; g.PixelOffsetMode = PixelOffsetMode.Half;
-            Gfx.Rect(g, ClientRectangle, Theme.Card);
+            g.Clear(Parent != null ? Parent.BackColor : Theme.Window);
+            int rad = Dpi.S(14);
+            Gfx.Fill(g, ClientRectangle, rad, Theme.Card);
             Rectangle inn = Inner;
             if (Count == 0)
             {
@@ -344,7 +396,15 @@ namespace OtzariaDict
                     DrawRow(g, i, new Rectangle(inn.X, y, inn.Width, rh), i == sel, i == hover);
                 g.Restore(st);
             }
-            Gfx.Frame(g, ClientRectangle, Focused ? Theme.Primary : Theme.Stroke, Dpi.Hair);
+            if (barOn)
+            {
+                bool hot = barHover || dragging;
+                Rectangle th = Thumb;
+                int w = Dpi.S(hot ? 8 : 6);
+                Gfx.Fill(g, new Rectangle(th.X + (th.Width - w) / 2, th.Y, w, th.Height), w / 2, hot ? Theme.ThumbHover : Theme.Thumb);
+            }
+            // the keyboard's place (once the keyboard is used, like every Windows list): a blue ring round the panel
+            if (Focused && ShowFocusCues) Gfx.Ring(g, ClientRectangle, rad, Theme.Primary, Math.Max(2, Dpi.S(2)));
         }
     }
 
@@ -358,7 +418,7 @@ namespace OtzariaDict
         public event EventHandler RemoveRequested;  // Delete
         public event EventHandler EditCommit;       // "אישור" or Enter while editing (the window reads EditWord and EditText)
 
-        public WordList() : base(30) { EmptyText = ""; }
+        public WordList() : base(32) { EmptyText = ""; }
 
         // 3.1: the sources of each word, as blue titles on the left of its row (null = no sources)
         public Func<string, WordSources> SourcesOf;
@@ -471,7 +531,7 @@ namespace OtzariaDict
         protected override void OnMouseMove(MouseEventArgs e)
         {
             base.OnMouseMove(e);
-            if (SourcesOf == null || Editing) return;
+            if (SourcesOf == null || Editing || Dragging) return;
             int row = RowAt(e.Location), item = -1;
             if (row >= 0)
             {
@@ -572,7 +632,6 @@ namespace OtzariaDict
             editor.Box.Text = editWord;
             editor.Visible = true;
             editor.BringToFront();
-            bar.Enabled = false;
             editor.Box.Focus();
             editor.Box.SelectAll();
             Invalidate();
@@ -582,7 +641,6 @@ namespace OtzariaDict
         {
             if (editor == null || !editor.Visible) return;
             editor.Visible = false;
-            bar.Enabled = true;
             Focus();
             Invalidate();
         }
@@ -605,9 +663,7 @@ namespace OtzariaDict
 
         protected override void DrawRow(Graphics g, int i, Rectangle r, bool selected, bool hovered)
         {
-            Gfx.Rect(g, r, selected ? Theme.Soft : (hovered ? Theme.RowHover : Theme.Card));
-            if (selected) Gfx.Rect(g, new Rectangle(r.Right - Dpi.S(4), r.Y, Dpi.S(4), r.Height), Theme.Primary);
-            Gfx.HLine(g, r.X, r.Bottom - Dpi.Hair, r.Width, Theme.Line);
+            RowBack(g, r, selected, hovered);
             if (SourcesOf == null)
             {
                 Gfx.TextAt(g, items[i], WordFont, Theme.Text, new Rectangle(r.X + Dpi.S(14), r.Y, r.Width - Dpi.S(28), r.Height), Align.Right, true, false);
@@ -631,7 +687,8 @@ namespace OtzariaDict
         }
     }
 
-    // the row while it is being edited: the word in a text box, "אישור" and "ביטול"
+    // the row while it is being edited: on the light blue of the chosen row, the word in a white field with a blue ring, and the round
+    // buttons "אישור" and "ביטול"
     class RowEditor : BaseControl
     {
         public readonly TextBox Box = new TextBox();
@@ -640,7 +697,7 @@ namespace OtzariaDict
 
         public RowEditor()
         {
-            BackColor = Theme.Soft;
+            BackColor = Theme.Soft;   // (the corners of the buttons take it)
             Visible = false;
             Box.BorderStyle = BorderStyle.None;
             Box.RightToLeft = RightToLeft.Yes;
@@ -650,37 +707,37 @@ namespace OtzariaDict
             Box.MaxLength = 200;
             TextRoom.Keep(Box);
             Ok = new FlatBtn { Text = "אישור", Style = BtnStyle.Filled, Small = true };
-            Cancel = new FlatBtn { Text = "ביטול", Style = BtnStyle.Outlined, Light = true, Small = true };
+            Cancel = new FlatBtn { Text = "ביטול", Style = BtnStyle.Secondary, Small = true };
             Controls.AddRange(new Control[] { Box, Ok, Cancel });
         }
 
         protected override void OnLayout(LayoutEventArgs e)
         {
             base.OnLayout(e);
-            int h = Math.Min(Height - 2, Dpi.S(24)), y = (Height - h) / 2, pad = Dpi.S(10), gap = Dpi.S(6), bw = Dpi.S(56);
+            int h = Math.Min(Height - Dpi.S(4), Dpi.S(28)), y = (Height - h) / 2, pad = Dpi.S(6), gap = Dpi.S(6), bw = Dpi.S(62);
             Cancel.Bounds = new Rectangle(pad, y, bw, h);
             Ok.Bounds = new Rectangle(pad + bw + gap, y, bw, h);
-            int fx = Ok.Right + gap, fr = Width - Dpi.S(14);
+            int fx = Ok.Right + gap, fr = Width - Dpi.S(6);
             frame = new Rectangle(fx, y, Math.Max(20, fr - fx), h);
-            int inset = Dpi.Hair + Dpi.S(5);
+            int inset = Math.Max(2, Dpi.S(2)) + Dpi.S(6);
             Box.Bounds = new Rectangle(frame.X + inset, frame.Y + (frame.Height - Box.Height) / 2, Math.Max(10, frame.Width - 2 * inset), Box.Height);
         }
 
         protected override void OnPaint(PaintEventArgs e)
         {
             Graphics g = e.Graphics;
-            Gfx.Rect(g, ClientRectangle, Theme.Soft);
-            Gfx.Rect(g, new Rectangle(Width - Dpi.S(4), 0, Dpi.S(4), Height), Theme.Primary);
-            Gfx.Rect(g, frame, Theme.Card);
-            Gfx.Frame(g, frame, Theme.Primary, Dpi.Hair);
+            g.SmoothingMode = SmoothingMode.AntiAlias; g.PixelOffsetMode = PixelOffsetMode.Half;
+            g.Clear(Theme.Card);
+            Gfx.Fill(g, new Rectangle(0, Dpi.S(1), Width, Height - Dpi.S(2)), Dpi.S(10), Theme.Soft);
+            Gfx.Fill(g, frame, Dpi.S(9), Theme.Card);
+            Gfx.Ring(g, frame, Dpi.S(9), Theme.Primary, Math.Max(2, Dpi.S(2)));
         }
     }
 
     // ------------------------------------------------------------------------------------------ the list of the person's changes
-    // A coloured mark (+ added, − removed, a pencil = corrected), the word ("wrong ← right" for a correction), and "בטל" on the left.
+    // A round light mark (+ added, − removed, a pencil = corrected), the word ("wrong ← right" for a correction), and "בטל" on the left.
     class ChangeList : ScrollList
     {
-        static readonly Color Green = ColorTranslator.FromHtml("#107C10");
         List<WordChange> items = new List<WordChange>();
         public bool AllowUndo = true;
         public event IndexFn UndoClicked;
@@ -723,11 +780,10 @@ namespace OtzariaDict
         protected override void DrawRow(Graphics g, int i, Rectangle r, bool selected, bool hovered)
         {
             WordChange c = items[i];
-            Gfx.Rect(g, r, selected ? Theme.Soft : (hovered ? Theme.RowHover : Theme.Card));
-            if (i < items.Count - 1) Gfx.HLine(g, r.X, r.Bottom - Dpi.Hair, r.Width, Theme.Line);
+            RowBack(g, r, selected, hovered);
 
-            int m = Dpi.S(22);
-            Rectangle mark = new Rectangle(r.Right - Dpi.S(14) - m, r.Y + (r.Height - m) / 2, m, m);
+            int m = Dpi.S(24);
+            Rectangle mark = new Rectangle(r.Right - Dpi.S(10) - m, r.Y + (r.Height - m) / 2, m, m);
             DrawMark(g, mark, c.Kind);
 
             int left = r.X + Dpi.S(14);
@@ -745,33 +801,22 @@ namespace OtzariaDict
             Gfx.TextAt(g, Describe(c), Theme.F(15, true), Theme.Text, new Rectangle(left, r.Y, Math.Max(0, mark.X - Dpi.S(10) - left), r.Height), Align.Right, true, false);
         }
 
-        // + on green, − on red, a pencil on blue: drawn, so that no special font is needed
+        // a green +, a red −, a blue pencil, each in a light circle of its colour: drawn, so that no special font is needed
         public static void DrawMark(Graphics g, Rectangle m, char kind)
         {
-            Gfx.Fill(g, m, Dpi.S(3), kind == '+' ? Green : kind == '-' ? Theme.Error : Theme.Primary);
-            float k = m.Width / 22f;
-            using (Pen p = new Pen(Theme.OnPrimary, 2.2f * k))
+            Color c = kind == '+' ? Theme.Ok : kind == '-' ? Theme.Error : Theme.Primary;
+            Gfx.Dot(g, m, kind == '+' ? Theme.OkMark : kind == '-' ? Theme.ErrorMark : Theme.SoftPill);
+            if (kind != '+' && kind != '-')
             {
-                p.StartCap = LineCap.Round; p.EndCap = LineCap.Round;
-                if (kind == '+')
-                {
-                    g.DrawLine(p, m.X + 11f * k, m.Y + 6f * k, m.X + 11f * k, m.Y + 16f * k);
-                    g.DrawLine(p, m.X + 6f * k, m.Y + 11f * k, m.X + 16f * k, m.Y + 11f * k);
-                }
-                else if (kind == '-')
-                {
-                    g.DrawLine(p, m.X + 6f * k, m.Y + 11f * k, m.X + 16f * k, m.Y + 11f * k);
-                }
-                else
-                {
-                    using (Pen body = new Pen(Theme.OnPrimary, 3.4f * k))
-                    {
-                        body.StartCap = LineCap.Flat; body.EndCap = LineCap.Round;
-                        g.DrawLine(body, m.X + 8.6f * k, m.Y + 13.4f * k, m.X + 15.4f * k, m.Y + 6.6f * k);
-                    }
-                    using (SolidBrush b = new SolidBrush(Theme.OnPrimary))
-                        g.FillPolygon(b, new PointF[] { new PointF(m.X + 5.4f * k, m.Y + 16.6f * k), new PointF(m.X + 6.6f * k, m.Y + 12.2f * k), new PointF(m.X + 9.8f * k, m.Y + 15.4f * k) });
-                }
+                int i = m.Width / 5;
+                IconBtn.DrawGlyph(g, Glyph.Pencil, Rectangle.Inflate(m, -i, -i), c);
+                return;
+            }
+            float k = m.Width / 24f;
+            using (Pen p = Gfx.IconPen(c, Math.Max(1.8f, 2.1f * k)))
+            {
+                g.DrawLine(p, m.X + 7.5f * k, m.Y + 12f * k, m.X + 16.5f * k, m.Y + 12f * k);
+                if (kind == '+') g.DrawLine(p, m.X + 12f * k, m.Y + 7.5f * k, m.X + 12f * k, m.Y + 16.5f * k);
             }
         }
     }
@@ -797,7 +842,7 @@ namespace OtzariaDict
         protected override void OnPaint(PaintEventArgs e)
         {
             Graphics g = e.Graphics;
-            g.Clear(Parent != null ? Parent.BackColor : Theme.Surface);
+            g.Clear(Parent != null ? Parent.BackColor : Theme.Window);
             if (under == null) { Font f = Theme.F(14, false); under = new Font(f, FontStyle.Underline); }
             Color c = !Enabled ? Theme.DisabledText : hover ? Theme.PrimaryDark : Theme.Primary;
             TextRenderer.DrawText(g, Text, under, ClientRectangle, c, TextFormatFlags.RightToLeft | TextFormatFlags.NoPrefix | TextFormatFlags.SingleLine | TextFormatFlags.Left | TextFormatFlags.VerticalCenter);
@@ -805,7 +850,6 @@ namespace OtzariaDict
         }
     }
 
-    // a big title with a round blue tick after it
     // ------------------------------------------------------------------------------------------ where each word appears (3.1)
     // The user (9-11): "the online libraries are full of typos" - so the word-editing window shows next to each word where it appears:
     // a blue title for each source (תנ"ך, משנה, תלמוד בבלי, תלמוד ירושלמי, or the name of the book) and, when the mouse rests on it, the
@@ -1008,11 +1052,16 @@ namespace OtzariaDict
         }
     }
 
-    // the floating window with the exact places of one source (shown while the mouse rests on its blue title)
+    // the floating window with the exact places of one source (shown while the mouse rests on its blue title): white, with a thin edge
+    // and no shadow (3.1, design B); on Windows 11 its corners are rounded by Windows itself
     sealed class SourcePopup : Form
     {
         WordSource src;
         string extra;   // instead of a source: a line such as "ועוד 12 ספרים"
+        bool roundBySystem;   // Windows 11 rounds the corners and draws the edge
+
+        [DllImport("dwmapi.dll")]
+        static extern int DwmSetWindowAttribute(IntPtr hwnd, int attribute, ref int value, int size);
 
         public SourcePopup()
         {
@@ -1031,9 +1080,24 @@ namespace OtzariaDict
             {
                 CreateParams cp = base.CreateParams;
                 cp.ExStyle |= 0x08000000 | 0x00000080;   // WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW: never takes the focus, not in Alt+Tab
-                cp.ClassStyle |= 0x00020000;              // CS_DROPSHADOW: the soft shadow of Windows' own pop-ups
                 return cp;
             }
+        }
+
+        protected override void OnHandleCreated(EventArgs e)
+        {
+            base.OnHandleCreated(e);
+            try
+            {
+                int round = 2;   // DWMWCP_ROUND
+                roundBySystem = DwmSetWindowAttribute(Handle, 33, ref round, 4) == 0;   // DWMWA_WINDOW_CORNER_PREFERENCE: Windows 11 only
+                if (roundBySystem)
+                {
+                    int edge = ColorTranslator.ToWin32(Theme.Line);
+                    DwmSetWindowAttribute(Handle, 34, ref edge, 4);   // DWMWA_BORDER_COLOR
+                }
+            }
+            catch (Exception) { roundBySystem = false; }   // (Windows 10 and older say no; Mono on Linux has no dwmapi)
         }
 
         static Font TitleFont { get { return Theme.F(14, true); } }
@@ -1067,7 +1131,7 @@ namespace OtzariaDict
         public void ShowFor(Control owner, WordSource s, string text, Point at)
         {
             src = s; extra = text;
-            int pad = Dpi.S(12), w = Dpi.S(200), most = Dpi.S(520);
+            int pad = Dpi.S(14), w = Dpi.S(200), most = Dpi.S(520);
             if (src != null) w = Math.Max(w, TextRenderer.MeasureText(Head(), TitleFont, Size.Empty, OneLine).Width);
             lines = Lines();
             foreach (string line in lines) w = Math.Max(w, TextRenderer.MeasureText(line, LineFont, Size.Empty, OneLine).Width);
@@ -1101,8 +1165,8 @@ namespace OtzariaDict
         {
             Graphics g = e.Graphics;
             Gfx.Rect(g, ClientRectangle, Theme.Card);
-            Gfx.Frame(g, ClientRectangle, Theme.BorderHover, Dpi.Hair);
-            int pad = Dpi.S(12), y = pad - Dpi.S(2), w = Width - 2 * pad;
+            if (!roundBySystem) Gfx.Frame(g, ClientRectangle, Theme.Line, Dpi.Hair);
+            int pad = Dpi.S(14), y = pad - Dpi.S(2), w = Width - 2 * pad;
             if (src != null)
             {
                 Gfx.TextAt(g, Head(), TitleFont, Theme.Primary, new Rectangle(pad, y, w, Dpi.S(22)), Align.Right, true, false);
@@ -1116,32 +1180,6 @@ namespace OtzariaDict
             }
             if (src != null && src.Places.Count > 0)
                 Gfx.TextAt(g, PlaceNote, NoteFont, Theme.TextQuiet, new Rectangle(pad, y + Dpi.S(4), w, Dpi.S(18)), Align.Right, true, false);
-        }
-    }
-
-    class TitleTick : BaseControl
-    {
-        protected override void OnPaint(PaintEventArgs e)
-        {
-            Graphics g = e.Graphics;
-            g.Clear(Parent != null ? Parent.BackColor : Theme.Card);
-            g.SmoothingMode = SmoothingMode.AntiAlias; g.PixelOffsetMode = PixelOffsetMode.Half;
-            Font f = Theme.F(22, true);
-            TextFormatFlags fl = TextFormatFlags.RightToLeft | TextFormatFlags.NoPrefix | TextFormatFlags.SingleLine | TextFormatFlags.NoPadding;
-            int mark = Dpi.S(22), gap = Dpi.S(10);
-            int tw;
-            try { tw = TextRenderer.MeasureText(g, Text, f, new Size(Width, Height), fl).Width; }
-            catch (Exception) { tw = Width - mark - gap; }
-            tw = Math.Max(0, Math.Min(tw, Width - mark - gap));
-            TextRenderer.DrawText(g, Text, f, new Rectangle(Width - tw, 0, tw, Height), Theme.Text, fl | TextFormatFlags.Right | TextFormatFlags.VerticalCenter);
-            Rectangle m = new Rectangle(Width - tw - gap - mark, (Height - mark) / 2, mark, mark);
-            Gfx.Dot(g, m, Theme.Primary);
-            float k = mark / 22f;
-            using (Pen tick = new Pen(Theme.OnPrimary, 2.6f * k))
-            {
-                tick.StartCap = LineCap.Round; tick.EndCap = LineCap.Round; tick.LineJoin = LineJoin.Round;
-                g.DrawLines(tick, new PointF[] { new PointF(m.X + 6.0f * k, m.Y + 11.4f * k), new PointF(m.X + 9.5f * k, m.Y + 14.8f * k), new PointF(m.X + 16.0f * k, m.Y + 7.6f * k) });
-            }
         }
     }
 
@@ -1199,7 +1237,7 @@ namespace OtzariaDict
             MaximizeBox = true; MinimizeBox = false; ShowInTaskbar = false;
             if (Dpi.Forced) { StartPosition = FormStartPosition.Manual; Location = new Point(0, 0); }
             else StartPosition = FormStartPosition.CenterParent;
-            BackColor = Theme.Card;
+            BackColor = Theme.Window;
             Font = Theme.F(14, false);
             ClientSize = Dpi.Sz(780, 640);
             MinimumSize = Size;
@@ -1207,38 +1245,39 @@ namespace OtzariaDict
             ClientSize = new Size(Math.Max(Dpi.S(780), Math.Min(Dpi.S(1000), work.Width - Dpi.S(40))), Math.Max(Dpi.S(640), Math.Min(Dpi.S(700), work.Height - Dpi.S(60))));
             Icon = MainForm.AppIcon();
 
-            title = new TextBlock { Bounds = Dpi.R(28, 20, 724, 34), Font = Theme.F(22, true), Color = Theme.Text, VCenter = true, Wrap = false, Text = "עריכת מילים" };
+            // (the places: LayoutAll)
+            title = new TextBlock { Font = Theme.F(22, true), Color = Theme.Text, VCenter = true, Wrap = false, Text = "עריכת מילים" };
             sub = new TextBlock
             {
-                Bounds = Dpi.R(28, 58, 724, 44), Font = Theme.F(14, false), Color = Theme.TextSoft,
+                Font = Theme.F(14, false), Color = Theme.TextSoft,
                 Text = "חפשו מילה כדי לתקן את האיות שלה או להסיר אותה מהמילון, או הוסיפו מילה חדשה. השינויים "
                      + (installed ? "חלים אצלכם אחרי \"שמור\", ונשארים גם אחרי עדכונים של המילון" : "יחולו אצלכם כשתתקינו את המילון")
                      + ", ואפשר לשלוח אותם כהצעה לשיפור המילון לכולם."
             };
 
             // right side: every word of the dictionary
-            listLabel = new TextBlock { Bounds = Dpi.R(322, 108, 430, 22), Font = Theme.F(14, true), Color = Theme.Text, VCenter = true, Wrap = false };
-            search = new FlatTextBox(15) { Bounds = Dpi.R(322, 134, 430, 36), SideUnits = 110 };
+            listLabel = new TextBlock { Font = Theme.F(14, true), Color = Theme.Text, VCenter = true, Wrap = false };
+            search = new FlatTextBox(15) { SideUnits = 110 };
             search.Cue = "חיפוש מילה במילון";
-            list = new WordList { Bounds = Dpi.R(322, 178, 430, 302) };
-            listNote = new TextBlock { Bounds = Dpi.R(322, 484, 430, 22), Font = Theme.F(13, false), Color = Theme.TextQuiet, VCenter = true, Wrap = false };
-            btnFix = new FlatBtn { Bounds = Dpi.R(612, 512, 140, 36), Text = "תקן איות", Style = BtnStyle.Outlined, Light = true };
-            btnRemove = new FlatBtn { Bounds = Dpi.R(460, 512, 140, 36), Text = "הסר מהמילון", Style = BtnStyle.Outlined, Light = true };
+            list = new WordList();
+            listNote = new TextBlock { Font = Theme.F(13, false), Color = Theme.TextQuiet, VCenter = true, Wrap = false };
+            btnFix = new FlatBtn { Text = "תקן איות", Style = BtnStyle.Secondary };
+            btnRemove = new FlatBtn { Text = "הסר מהמילון", Style = BtnStyle.Secondary };
 
             // left side: a new word, and the person's changes
-            addLabel = new TextBlock { Bounds = Dpi.R(28, 108, 280, 22), Font = Theme.F(14, true), Color = Theme.Text, VCenter = true, Wrap = false, Text = "הוספת מילה חדשה" };
-            addBox = new FlatTextBox(15) { Bounds = Dpi.R(118, 134, 190, 36) };
+            addLabel = new TextBlock { Font = Theme.F(14, true), Color = Theme.Text, VCenter = true, Wrap = false, Text = "הוספת מילה חדשה" };
+            addBox = new FlatTextBox(15);
             addBox.Cue = "מילה חדשה";
-            btnAdd = new FlatBtn { Bounds = Dpi.R(28, 134, 80, 36), Text = "הוסף", Style = BtnStyle.Filled };
-            addHint = new TextBlock { Bounds = Dpi.R(28, 175, 280, 38), Font = Theme.F(13, false), Color = Theme.Primary };
-            chLabel = new TextBlock { Bounds = Dpi.R(28, 214, 280, 22), Font = Theme.F(14, true), Color = Theme.Text, VCenter = true, Wrap = false };
-            changes = new ChangeList(40) { Bounds = Dpi.R(28, 240, 280, 242) };
-            chNote = new TextBlock { Bounds = Dpi.R(28, 488, 280, 40), Font = Theme.F(13, false), Color = Theme.TextQuiet,
+            btnAdd = new FlatBtn { Text = "הוסף", Style = BtnStyle.Filled };
+            addHint = new TextBlock { Font = Theme.F(13, false), Color = Theme.Primary };
+            chLabel = new TextBlock { Font = Theme.F(14, true), Color = Theme.Text, VCenter = true, Wrap = false };
+            changes = new ChangeList(40);
+            chNote = new TextBlock { Font = Theme.F(13, false), Color = Theme.TextQuiet,
                 Text = "השינויים נשמרים במחשב שלכם, וחלים גם אחרי כל עדכון של המילון." };
 
-            lower = new LowerPanel { Bounds = Dpi.R(0, 568, 780, 72) };
-            btnSave = new FlatBtn { Bounds = Dpi.R(532, 16, 220, 40), Text = installed ? "שמור ועדכן את וורד" : "שמור", Style = BtnStyle.Filled };
-            btnClose = new FlatBtn { Bounds = Dpi.R(28, 16, 110, 40), Text = "סגור", Style = BtnStyle.Outlined, Light = true };
+            lower = new LowerPanel();
+            btnSave = new FlatBtn { Text = installed ? "שמור ועדכן את וורד" : "שמור", Style = BtnStyle.Filled };
+            btnClose = new FlatBtn { Text = "סגור", Style = BtnStyle.Secondary };
             lower.Controls.AddRange(new Control[] { btnSave, btnClose });
 
             // the order of the Tab key: right to left, top to bottom
@@ -1299,17 +1338,22 @@ namespace OtzariaDict
             title.Bounds = new Rectangle(Dpi.S(28), Dpi.S(20), W - Dpi.S(56), Dpi.S(34));
             sub.Bounds = new Rectangle(Dpi.S(28), Dpi.S(58), W - Dpi.S(56), Dpi.S(44));
             int rx = Dpi.S(322), rw = Dpi.S(430) + ex;
-            listLabel.Bounds = new Rectangle(rx, Dpi.S(108), rw, Dpi.S(22));
-            search.Bounds = new Rectangle(rx, Dpi.S(134), rw, Dpi.S(36));
-            list.Bounds = new Rectangle(rx, Dpi.S(178), rw, Dpi.S(302) + ey);
+            listLabel.Bounds = new Rectangle(rx, Dpi.S(110), rw, Dpi.S(22));
+            search.Bounds = new Rectangle(rx, Dpi.S(136), rw, Dpi.S(40));
+            list.Bounds = new Rectangle(rx, Dpi.S(186), rw, Dpi.S(294) + ey);
             listNote.Bounds = new Rectangle(rx, Dpi.S(484) + ey, rw, Dpi.S(22));
-            btnFix.Bounds = new Rectangle(Dpi.S(612) + ex, Dpi.S(512) + ey, Dpi.S(140), Dpi.S(36));
-            btnRemove.Bounds = new Rectangle(Dpi.S(460) + ex, Dpi.S(512) + ey, Dpi.S(140), Dpi.S(36));
-            changes.Bounds = new Rectangle(Dpi.S(28), Dpi.S(240), Dpi.S(280), Dpi.S(242) + ey);
+            btnFix.Bounds = new Rectangle(Dpi.S(612) + ex, Dpi.S(512) + ey, Dpi.S(140), Dpi.S(40));
+            btnRemove.Bounds = new Rectangle(Dpi.S(462) + ex, Dpi.S(512) + ey, Dpi.S(140), Dpi.S(40));
+            addLabel.Bounds = new Rectangle(Dpi.S(28), Dpi.S(110), Dpi.S(280), Dpi.S(22));
+            addBox.Bounds = new Rectangle(Dpi.S(124), Dpi.S(136), Dpi.S(184), Dpi.S(40));
+            btnAdd.Bounds = new Rectangle(Dpi.S(28), Dpi.S(136), Dpi.S(86), Dpi.S(40));
+            addHint.Bounds = new Rectangle(Dpi.S(28), Dpi.S(181), Dpi.S(280), Dpi.S(38));
+            chLabel.Bounds = new Rectangle(Dpi.S(28), Dpi.S(220), Dpi.S(280), Dpi.S(22));
+            changes.Bounds = new Rectangle(Dpi.S(28), Dpi.S(246), Dpi.S(280), Dpi.S(234) + ey);
             chNote.Bounds = new Rectangle(Dpi.S(28), Dpi.S(488) + ey, Dpi.S(280), Dpi.S(40));
-            lower.Bounds = new Rectangle(0, Dpi.S(568) + ey, W, Dpi.S(72));
-            btnSave.Bounds = new Rectangle(Dpi.S(532) + ex, Dpi.S(16), Dpi.S(220), Dpi.S(40));
-            btnClose.Bounds = new Rectangle(Dpi.S(28), Dpi.S(16), Dpi.S(110), Dpi.S(40));
+            lower.Bounds = new Rectangle(0, Dpi.S(572) + ey, W, Dpi.S(68));
+            btnSave.Bounds = new Rectangle(Dpi.S(532) + ex, 0, Dpi.S(220), Dpi.S(44));
+            btnClose.Bounds = new Rectangle(Dpi.S(28), 0, Dpi.S(120), Dpi.S(44));
         }
 
         protected override void OnResize(EventArgs e) { base.OnResize(e); LayoutAll(); }
@@ -1526,7 +1570,7 @@ namespace OtzariaDict
                 else edits.Fix(c.Word, c.NewWord);
             }
             search.Value = "בסוגיי";
-            addBox.Value = "ודמסתייעא";
+            addBox.Value = "וכדמסתייעא";
             RefreshAll("בסוגייין", -1);
             list.BeginEdit();
             list.EditText = "בסוגיין";
@@ -1541,12 +1585,13 @@ namespace OtzariaDict
             RefreshAll(null, -1);
         }
 
+        // (words of the 3.1 lists: the one added is not in them, the one removed and the one corrected are)
         public static List<WordChange> DemoChanges()
         {
             List<WordChange> l = new List<WordChange>();
-            l.Add(new WordChange('+', "דמסתייעא", null));
-            l.Add(new WordChange('-', "בבגמרא", null));
-            l.Add(new WordChange('~', "בסוגיייתנו", "בסוגייתנו"));
+            l.Add(new WordChange('+', "ודמסתייעא", null));
+            l.Add(new WordChange('-', "בגמארא", null));
+            l.Add(new WordChange('~', "דאוריייתא", "דאורייתא"));
             return l;
         }
     }
@@ -1578,31 +1623,31 @@ namespace OtzariaDict
             MaximizeBox = false; MinimizeBox = false; ShowInTaskbar = false;
             if (Dpi.Forced) { StartPosition = FormStartPosition.Manual; Location = new Point(0, 0); }
             else StartPosition = FormStartPosition.CenterParent;
-            BackColor = Theme.Card;
+            BackColor = Theme.Window;
             Font = Theme.F(14, false);
-            ClientSize = Dpi.Sz(560, 440);
+            ClientSize = Dpi.Sz(560, 436);
             Icon = MainForm.AppIcon();
 
-            TitleTick head = new TitleTick { Bounds = Dpi.R(28, 20, 504, 34), Text = "השינויים נשמרו" };
+            MarkTitle head = new MarkTitle { Bounds = Dpi.R(28, 24, 504, 32), Kind = MsgKind.Ok, Font = Theme.F(20, true), Text = "השינויים נשמרו" };
             TextBlock sub = new TextBlock
             {
-                Bounds = Dpi.R(28, 60, 504, 62), Font = Theme.F(14, false), Color = Theme.TextSoft,
+                Bounds = Dpi.R(28, 64, 504, 62), Font = Theme.F(14, false), Color = Theme.TextSoft,
                 Text = "אפשר לשלוח אותם כהצעה לשיפור המילון לכולם, ובעל המילון יחליט אם להכניס אותם לגרסה הבאה. "
                      + "ההצעה מתפרסמת בגלוי בגיטהב של המילון, בלי שם ובלי פרטים מזהים."
             };
-            ChangeList list = new ChangeList(34) { Bounds = Dpi.R(28, 130, 504, 106), AllowUndo = false, TabStop = false };
+            ChangeList list = new ChangeList(34) { Bounds = Dpi.R(28, 134, 504, 116), AllowUndo = false, TabStop = false };
             list.SetItems(items);
-            TextBlock noteLabel = new TextBlock { Bounds = Dpi.R(28, 248, 504, 22), Font = Theme.F(14, true), Color = Theme.Text, VCenter = true, Wrap = false,
+            TextBlock noteLabel = new TextBlock { Bounds = Dpi.R(28, 262, 504, 22), Font = Theme.F(14, true), Color = Theme.Text, VCenter = true, Wrap = false,
                 Text = "הערה (לא חובה) – למשל מאיפה המילה:" };
-            note = new FlatTextBox(15) { Bounds = Dpi.R(28, 274, 504, 36) };
+            note = new FlatTextBox(15) { Bounds = Dpi.R(28, 288, 504, 40) };
             note.Cue = "למשל: גמרא, ברכות דף ב";
-            status = new TextBlock { Bounds = Dpi.R(28, 316, 504, 24), Font = Theme.F(13, false), Color = Theme.TextQuiet, VCenter = true, Wrap = false,
+            status = new TextBlock { Bounds = Dpi.R(28, 334, 504, 24), Font = Theme.F(13, false), Color = Theme.TextQuiet, VCenter = true, Wrap = false,
                 Text = hasKey ? "" : "השליחה היא דרך אתר גיטהב, וצריך חשבון גיטהב." };
 
-            LowerPanel strip = new LowerPanel { Bounds = Dpi.R(0, 350, 560, 90) };
-            btnSend = new FlatBtn { Bounds = Dpi.R(392, 24, 140, 42), Text = hasKey ? "שלח" : "שלח דרך גיטהב", Style = BtnStyle.Filled };
-            btnLater = new FlatBtn { Bounds = Dpi.R(272, 24, 110, 42), Text = "לא עכשיו", Style = BtnStyle.Outlined, Light = true };
-            link = new LinkText { Bounds = Dpi.R(28, 34, 236, 22), Text = "יש לי חשבון גיטהב – שלח דרך גיטהב", Visible = hasKey };
+            LowerPanel strip = new LowerPanel { Bounds = Dpi.R(0, 368, 560, 68) };
+            btnSend = new FlatBtn { Bounds = Dpi.R(392, 0, 140, 44), Text = hasKey ? "שלח" : "שלח דרך גיטהב", Style = BtnStyle.Filled };
+            btnLater = new FlatBtn { Bounds = Dpi.R(268, 0, 114, 44), Text = "לא עכשיו", Style = BtnStyle.Secondary };
+            link = new LinkText { Bounds = Dpi.R(28, 11, 232, 22), Text = "יש לי חשבון גיטהב – שלח דרך גיטהב", Visible = hasKey };
             btnSend.Click += delegate { DoSend(); };
             btnLater.Click += delegate { Close(); };
             link.Click += delegate { if (!sending) OpenBrowser(); };

@@ -25,7 +25,7 @@ namespace OtzariaDict
     // that it handles a magnified screen by itself. Without that, Windows draws the finished window small and stretches the picture: that made it blurry at 125 % / 150 %.
     static class Dpi
     {
-        public const int WindowHeight = 674;       // the main window, in design units (its width is 720)
+        public const int WindowHeight = 686;       // the main window, in design units (its width is 720); with the frame it fits a 1366 x 768 screen
         public static float Scale = 1f;
         public static bool Forced;                 // --dpi N : for the developer's screenshots on a machine without Windows
 
@@ -60,48 +60,58 @@ namespace OtzariaDict
         public static Size Sz(int w, int h) { return new Size(S(w), S(h)); }
     }
 
-    // Look (3.1, "cleaner and more modern"): the light grey window of Windows 11 with white cards, rounded corners, the blue of Word as the
-    // accent, light borders, semibold titles. The colours keep their old names, so every window of the program takes the new look.
+    // Look (3.1, the owner's choice of 9-11, "soft and round"): every window light grey, with white cards, lists and fields on it that have
+    // no border; big rounded corners, round ("pill") buttons, a soft blue accent, semibold titles. Flat colours only: no shadows, no
+    // gradients, no sheen (the owner: "בלי צל והצללות").
     static class Theme
     {
         static Color C(string hex) { return ColorTranslator.FromHtml(hex); }
-        public static readonly Color Primary = C("#185ABD");        // the blue of Word (the accent)
-        public static readonly Color PrimaryHover = C("#1550A8");
-        public static readonly Color PrimaryDark = C("#0F4290");    // pressed button, word count of the chosen card
+        public static readonly Color Primary = C("#2F6EEC");        // the accent (white text on it: 4.6:1)
+        public static readonly Color PrimaryHover = C("#2862D9");
+        public static readonly Color PrimaryDark = C("#2154C2");    // a pressed blue button
         public static readonly Color OnPrimary = C("#FFFFFF");
-        public static readonly Color OnPrimarySoft = C("#D6E4F7");  // small text on the blue (second line of the install button)
-        public static readonly Color Soft = C("#EEF4FD");           // light blue: the chosen card, a quiet blue button
-        public static readonly Color SoftHover = C("#E1ECFB");
-        public static readonly Color SoftPill = C("#DCE8FA");       // the word count of the chosen card
-        public static readonly Color Window = C("#F4F5F7");         // the main window: light grey, the cards on it are white
-        public static readonly Color Surface = C("#FFFFFF");        // dialogs
-        public static readonly Color Panel = C("#F4F5F7");          // the button strip at the bottom of a dialog
-        public static readonly Color Card = C("#FFFFFF");           // cards, list rows, buttons
-        public static readonly Color RowHover = C("#F8F9FB");
-        public static readonly Color Line = C("#E6E8EB");           // light dividing lines
-        public static readonly Color Border = C("#DFE2E6");         // the border of a card
-        public static readonly Color BorderHover = C("#C3C8CF");
-        public static readonly Color Stroke = C("#C9CDD3");         // the border of a button, of a list, of a text box
-        public static readonly Color Mark = C("#8A9099");           // an empty round mark / switch
-        public static readonly Color Track = C("#E3E6EA");          // empty progress line
-        public static readonly Color Pill = C("#EEF0F3");           // a quiet label (word count, status)
-        public static readonly Color BtnHover = C("#F4F5F7");
-        public static readonly Color BtnPress = C("#EAECEF");
-        public static readonly Color DisabledBack = C("#F1F2F4");
-        public static readonly Color DisabledText = C("#A3A8AF");
-        public static readonly Color DisabledLine = C("#D8DCE0");
-        public static readonly Color Text = C("#1B1D21");
-        public static readonly Color TextSoft = C("#4F5560");       // descriptions
-        public static readonly Color TextQuiet = C("#6B717B");      // footer, version, small notes (4.9:1 on the window grey)
-        public static readonly Color Ok = C("#0F7B3F");             // "installed"
-        public static readonly Color OkSoft = C("#E6F4EC");
-        public static readonly Color OnOk = C("#0B5A2E");
-        public static readonly Color Warn = C("#B07A00");           // "can be updated"
-        public static readonly Color WarnSoft = C("#FFF5D6");
-        public static readonly Color OnWarn = C("#6B4A00");
+        public static readonly Color OnPrimarySoft = C("#E2EBFE");  // small text on the blue (second line of the install button)
+        public static readonly Color Soft = C("#EEF4FF");           // light blue: the chosen card, the chosen row of a list
+        public static readonly Color SoftHover = C("#E2EBFD");      // a quiet blue button under the mouse
+        public static readonly Color SoftPill = C("#DCE7FF");       // the word count of the chosen card; the circle of a blue mark
+        public static readonly Color OnSoftPill = C("#2554C7");
+        public static readonly Color IconBack = C("#EEF3FF");       // the circle behind the icon of a tool
+        public static readonly Color Window = C("#F2F3F5");         // the background of every window
+        public static readonly Color Card = C("#FFFFFF");           // cards, tiles, lists, text fields
+        public static readonly Color CardHover = C("#F8FAFF");      // a card or a tile under the mouse ...
+        public static readonly Color RingHover = C("#D3DFFB");      // ... with a light blue ring
+        public static readonly Color RowHover = C("#F3F5F9");       // a row of a list under the mouse
+        public static readonly Color Secondary = C("#E4E7EC");      // the grey button
+        public static readonly Color SecondaryHover = C("#DADEE4");
+        public static readonly Color SecondaryPress = C("#CFD4DB");
+        public static readonly Color Line = C("#CDD3DB");           // the thin edge of the floating window of the sources
+        public static readonly Color Mark = C("#B4BAC3");           // the ring of an empty round mark
+        public static readonly Color MarkHover = C("#949CA8");
+        public static readonly Color SwitchOff = C("#C9CED6");
+        public static readonly Color SwitchOffHover = C("#BAC0CA");
+        public static readonly Color Track = C("#E4E7EC");          // the empty part of the progress line
+        public static readonly Color Pill = C("#F2F3F5");           // a quiet label (the word count of a card)
+        public static readonly Color OnPill = C("#4A5160");
+        public static readonly Color Thumb = C("#C9CED6");          // the scroll bar of a list
+        public static readonly Color ThumbHover = C("#A7AEB9");
+        public static readonly Color DisabledBack = C("#E9EBEE");
+        public static readonly Color DisabledText = C("#A0A6AF");
+        public static readonly Color Text = C("#1D2433");
+        public static readonly Color TextSoft = C("#5A6272");       // descriptions (6:1 on white)
+        public static readonly Color TextQuiet = C("#656C7A");      // footer, version, small notes (4.7:1 on the window grey)
+        public static readonly Color Ok = C("#1C7A47");             // "installed", done
+        public static readonly Color OkSoft = C("#E5F4EA");
+        public static readonly Color OkMark = C("#D5EEDD");         // the circle of a green mark
+        public static readonly Color OnOk = C("#155E37");
+        public static readonly Color OnOkSoft = C("#2E5A43");
+        public static readonly Color Warn = C("#B07A00");           // "can be updated", attention
+        public static readonly Color WarnMark = C("#FBEBC4");
+        public static readonly Color OnWarn = C("#7A5300");
         public static readonly Color Error = C("#C42B1C");
         public static readonly Color ErrorSoft = C("#FDECEA");
+        public static readonly Color ErrorMark = C("#F9DAD6");
         public static readonly Color OnError = C("#8A1C12");
+        public static readonly Color OnErrorSoft = C("#7A352D");
 
         // fonts are created once and reused. size = height in design units (pixels at 100 %); the font is made in whole real pixels.
         // "bold" is Segoe UI Semibold where Windows has it (the weight of Windows 11 titles): lighter and more modern than Bold.
@@ -195,48 +205,21 @@ namespace OtzariaDict
             return Color.FromArgb((int)(a.A + (b.A - a.A) * t), (int)(a.R + (b.R - a.R) * t), (int)(a.G + (b.G - a.G) * t), (int)(a.B + (b.B - a.B) * t));
         }
 
-        // 3.1 (the user: softer buttons, a "bubble" like Windows): a soft shadow under a rounded shape - a few fills of the shape, each a
-        // little lower and wider, very light (fills, not pens: they stay smooth). depth = how high the shape floats, in pixels.
-        public static void Shadow(Graphics g, Rectangle r, int rad, int depth)
+        // A ring of w whole pixels along the inside edge of a rounded rectangle (the blue ring of the chosen card, the focus mark): one fill
+        // of the shape with its inside cut out, not a pen - a filled edge on whole pixels is sharp, a pen line centred between two pixels
+        // is smeared over both of them.
+        public static void Ring(Graphics g, Rectangle r, int rad, Color c, int w)
         {
-            for (int i = depth; i >= 1; i--)
-            {
-                Rectangle s = new Rectangle(r.X - (i - 1), r.Y + i, r.Width + 2 * (i - 1), r.Height);
-                int a = 8 + 7 * (depth - i);
-                using (GraphicsPath p = Round(Exact(s), rad + i - 1)) using (SolidBrush b = new SolidBrush(Color.FromArgb(a, 20, 30, 50))) g.FillPath(b, p);
-            }
-        }
-
-        // a rounded shape filled from top to bottom with two colours, and a light sheen over its upper half
-        public static void Bubble(Graphics g, Rectangle r, int rad, Color top, Color bottom, int sheen)
-        {
-            Rectangle e = Exact(r);
-            if (e.Width <= 1 || e.Height <= 1) return;
-            using (GraphicsPath p = Round(e, rad))
-            {
-                using (LinearGradientBrush b = new LinearGradientBrush(new Rectangle(e.X, e.Y - 1, e.Width, e.Height + 2), top, bottom, LinearGradientMode.Vertical))
-                    g.FillPath(b, p);
-                if (sheen > 0)
-                {
-                    GraphicsState st = g.Save();
-                    g.SetClip(p, CombineMode.Intersect);
-                    Rectangle half = new Rectangle(e.X, e.Y, e.Width, Math.Max(2, e.Height / 2));
-                    using (LinearGradientBrush b = new LinearGradientBrush(new Rectangle(half.X, half.Y - 1, half.Width, half.Height + 2),
-                                                                           Color.FromArgb(sheen, 255, 255, 255), Color.FromArgb(0, 255, 255, 255), LinearGradientMode.Vertical))
-                        g.FillRectangle(b, half);
-                    g.Restore(st);
-                }
-            }
-        }
-
-        // A rounded rectangle with a border of w whole pixels: first the whole shape in the border colour, then the inside (smaller by w on every
-        // side) on top of it. Two fills, not a pen: a filled edge on a whole-pixel position is sharp, while a pen line that is centred on the
-        // edge between two pixels is smeared over both of them (that - and the soft shadows - is what made the old borders look grainy).
-        public static void Box(Graphics g, Rectangle r, int rad, Color back, Color border, int w)
-        {
-            Fill(g, r, rad, border);
             Rectangle inner = Rectangle.Inflate(r, -w, -w);
-            if (inner.Width > 0 && inner.Height > 0) Fill(g, inner, Math.Max(0, rad - w), back);
+            if (inner.Width <= 0 || inner.Height <= 0) { Fill(g, r, rad, c); return; }
+            using (GraphicsPath p = Round(Exact(r), rad))
+            using (GraphicsPath hole = Round(Exact(inner), Math.Max(0, rad - w)))
+            using (SolidBrush b = new SolidBrush(c))
+            {
+                p.AddPath(hole, false);
+                p.FillMode = FillMode.Alternate;
+                g.FillPath(b, p);
+            }
         }
         public static void Dot(Graphics g, Rectangle r, Color c)
         { using (SolidBrush b = new SolidBrush(c)) g.FillEllipse(b, Exact(r)); }
@@ -249,9 +232,6 @@ namespace OtzariaDict
         // a plain filled rectangle (always whole pixels, so its edges are sharp)
         public static void Rect(Graphics g, Rectangle r, Color c)
         { using (SolidBrush b = new SolidBrush(c)) g.FillRectangle(b, r); }
-        // a thin straight line (a filled strip, always whole pixels)
-        public static void HLine(Graphics g, int x, int y, int w, Color c)
-        { Rect(g, new Rectangle(x, y, w, Dpi.Hair), c); }
         // an outline of w whole pixels (four strips)
         public static void Frame(Graphics g, Rectangle r, Color c, int w)
         {
@@ -259,6 +239,31 @@ namespace OtzariaDict
             Rect(g, new Rectangle(r.X, r.Bottom - w, r.Width, w), c);
             Rect(g, new Rectangle(r.X, r.Y + w, w, r.Height - 2 * w), c);
             Rect(g, new Rectangle(r.Right - w, r.Y + w, w, r.Height - 2 * w), c);
+        }
+
+        // a pen for the line icons: round ends and corners
+        public static Pen IconPen(Color c, float width)
+        {
+            Pen p = new Pen(c, width);
+            p.StartCap = LineCap.Round; p.EndCap = LineCap.Round; p.LineJoin = LineJoin.Round;
+            return p;
+        }
+
+        // a tick, drawn in a square r (in units of 24, the size of the line icons)
+        public static void Tick(Graphics g, Rectangle r, Color c, float width)
+        {
+            float k = r.Width / 24f;
+            using (Pen p = IconPen(c, width))
+                g.DrawLines(p, new PointF[] { new PointF(r.X + 7.5f * k, r.Y + 12.5f * k), new PointF(r.X + 10.5f * k, r.Y + 15.5f * k), new PointF(r.X + 16.5f * k, r.Y + 9f * k) });
+        }
+
+        // "!", drawn (a line and a dot), in a square r
+        public static void Bang(Graphics g, Rectangle r, Color c, float width)
+        {
+            float k = r.Width / 24f;
+            using (Pen p = IconPen(c, width)) g.DrawLine(p, r.X + 12f * k, r.Y + 7f * k, r.X + 12f * k, r.Y + 13.2f * k);
+            float d = width * 1.25f;
+            using (SolidBrush b = new SolidBrush(c)) g.FillEllipse(b, r.X + 12f * k - d / 2f, r.Y + 16.8f * k - d / 2f, d, d);
         }
 
         // Hebrew text: right-to-left reading order, aligned to the right unless centred
@@ -283,24 +288,30 @@ namespace OtzariaDict
                                                  | TextFormatFlags.Right | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
         }
 
+        // the colour of a mark of this kind, and the light circle behind it
         public static Color MarkColor(MsgKind k)
         { return k == MsgKind.Ok ? Theme.Ok : k == MsgKind.Warn ? Theme.Warn : k == MsgKind.Error ? Theme.Error : Theme.Primary; }
+        static Color MarkBack(MsgKind k)
+        { return k == MsgKind.Ok ? Theme.OkMark : k == MsgKind.Warn ? Theme.WarnMark : k == MsgKind.Error ? Theme.ErrorMark : Theme.SoftPill; }
 
-        // a round mark: a tick (done), "!" (attention, or it did not work), "?" (a question) or "i" (good to know).
-        // glyph = the size of the "!" / "?" / "i" in design units
-        public static void Mark(Graphics g, Rectangle m, MsgKind k, float glyph)
+        // the mark at the start of the title of a message: a light round circle with a tick (done), "!" (attention, or it did not work),
+        // "?" (a question) or "i" (good to know) in its colour
+        public static void SoftMark(Graphics g, Rectangle m, MsgKind k)
         {
-            Dot(g, m, MarkColor(k));
-            if (k == MsgKind.Ok)
-            {
-                float s = m.Width / 22f;
-                using (Pen tick = new Pen(Theme.OnPrimary, 2.4f * s))
-                {
-                    tick.StartCap = LineCap.Round; tick.EndCap = LineCap.Round; tick.LineJoin = LineJoin.Round;
-                    g.DrawLines(tick, new PointF[] { new PointF(m.X + 6.0f * s, m.Y + 11.4f * s), new PointF(m.X + 9.5f * s, m.Y + 14.8f * s), new PointF(m.X + 16.0f * s, m.Y + 7.6f * s) });
-                }
-            }
-            else Text(g, k == MsgKind.Question ? "?" : k == MsgKind.Info ? "i" : "!", Theme.F(glyph, true), Theme.OnPrimary, m, true, true);
+            Dot(g, m, MarkBack(k));
+            Color c = MarkColor(k);
+            float w = Math.Max(2f, 2.4f * m.Width / 30f);
+            if (k == MsgKind.Ok) Tick(g, m, c, w);
+            else if (k == MsgKind.Warn || k == MsgKind.Error) Bang(g, m, c, w);
+            else Text(g, k == MsgKind.Question ? "?" : "i", Theme.F(m.Width * 0.55f / Dpi.Scale, true), c, m, true, true);
+        }
+
+        // the mark of the result bar: a thin ring with a tick (it worked) or "!" (it did not)
+        public static void LineMark(Graphics g, Rectangle m, bool ok, Color c)
+        {
+            float k = m.Width / 24f, w = Math.Max(1.6f, 1.8f * k);
+            using (Pen p = IconPen(c, w)) g.DrawEllipse(p, m.X + 2.5f * k, m.Y + 2.5f * k, 19f * k, 19f * k);
+            if (ok) Tick(g, m, c, w); else Bang(g, m, c, w);
         }
     }
 
@@ -325,41 +336,21 @@ namespace OtzariaDict
             Graphics g = e.Graphics;
             g.SmoothingMode = SmoothingMode.AntiAlias; g.PixelOffsetMode = PixelOffsetMode.Half;
             g.Clear(BackColor);
-            int cl = ContentLeft >= 0 ? ContentLeft : Dpi.S(32), cr = ContentRight >= 0 ? ContentRight : Width - Dpi.S(32);
-            Rectangle logo = new Rectangle(cr - Dpi.S(48), Dpi.S(24), Dpi.S(48), Dpi.S(48));
-            Gfx.Shadow(g, logo, Dpi.S(12), 2);
-            Gfx.Bubble(g, logo, Dpi.S(12), Gfx.Mix(Theme.Primary, Color.White, 0.18f), Theme.Primary, 50);
-            Gfx.Text(g, "א", Theme.F(28, true), Theme.OnPrimary, logo, true, true);
-            int right = logo.X - Dpi.S(16), left = cl + Dpi.S(308);
-            Gfx.TextAt(g, MainForm.Title, Theme.F(24, true), Theme.Text, new Rectangle(left, Dpi.S(22), right - left, Dpi.S(32)), Align.Right, true, false);
-            Gfx.TextAt(g, "כדי שוורד יפסיק לסמן מילים תורניות כשגיאות", Theme.F(14, false), Theme.TextSoft, new Rectangle(left, Dpi.S(54), right - left, Dpi.S(20)), Align.Right, true, false);
+            int cl = ContentLeft >= 0 ? ContentLeft : Dpi.S(34), cr = ContentRight >= 0 ? ContentRight : Width - Dpi.S(34);
+            Rectangle logo = new Rectangle(cr - Dpi.S(48), Dpi.S(22), Dpi.S(48), Dpi.S(48));
+            Gfx.Fill(g, logo, Dpi.S(15), Theme.Primary);
+            Gfx.Text(g, "א", Theme.F(27, true), Theme.OnPrimary, logo, true, true);
+            int right = logo.X - Dpi.S(14), left = cl + Dpi.S(308);
+            Gfx.TextAt(g, MainForm.Title, Theme.F(24, true), Theme.Text, new Rectangle(left, Dpi.S(20), right - left, Dpi.S(32)), Align.Right, true, false);
+            Gfx.TextAt(g, "כדי שוורד יפסיק לסמן מילים תורניות כשגיאות", Theme.F(14, false), Theme.TextSoft, new Rectangle(left, Dpi.S(52), right - left, Dpi.S(20)), Align.Right, true, false);
         }
     }
 
-    // the light strip at the bottom of a dialog: a thin line on top, the buttons on it
+    // the place of the buttons at the bottom of a dialog: no strip and no line of its own (3.1), the buttons simply stand on the window
     class LowerPanel : BaseControl
     {
-        public LowerPanel() { BackColor = Theme.Panel; }
-        protected override void OnPaint(PaintEventArgs e)
-        {
-            e.Graphics.Clear(BackColor);
-            Gfx.HLine(e.Graphics, 0, 0, Width, Theme.Line);
-        }
-    }
-
-    // a white card with rounded corners and a light border, on the grey of the main window (its controls sit inside it)
-    class CardPanel : BaseControl
-    {
-        public CardPanel() { BackColor = Theme.Card; }
-        protected override void OnPaint(PaintEventArgs e)
-        {
-            Graphics g = e.Graphics;
-            g.SmoothingMode = SmoothingMode.AntiAlias; g.PixelOffsetMode = PixelOffsetMode.Half;
-            g.Clear(Parent != null ? Parent.BackColor : Theme.Window);
-            Rectangle r = new Rectangle(1, 0, Width - 2, Height - Dpi.S(3));   // 3.1: floating a little over a soft shadow, like the cards
-            Gfx.Shadow(g, r, Dpi.S(10), 2);
-            Gfx.Box(g, r, Dpi.S(10), Theme.Card, Theme.Border, Dpi.Hair);
-        }
+        public LowerPanel() { BackColor = Theme.Window; }
+        protected override void OnPaint(PaintEventArgs e) { e.Graphics.Clear(Parent != null ? Parent.BackColor : BackColor); }
     }
 
     class TextBlock : BaseControl
@@ -371,15 +362,15 @@ namespace OtzariaDict
         public override string Text { get { return text; } set { text = value ?? ""; Invalidate(); } }
         protected override void OnPaint(PaintEventArgs e)
         {
-            e.Graphics.Clear(Parent != null ? Parent.BackColor : Theme.Surface);
+            e.Graphics.Clear(Parent != null ? Parent.BackColor : Theme.Window);
             Gfx.TextAt(e.Graphics, text, Font, Color, new Rectangle(0, 0, Width, Height), Center ? Align.Center : Align.Right, VCenter, Wrap);
         }
     }
 
     enum LabelKind { None, Ok, Warn }
 
-    // "installed: ..." - a pill: a coloured dot and the text, on a light background of the same colour (green = up to date,
-    // yellow = can be updated, grey = not installed). It hugs the left edge of its control.
+    // "installed: ..." - a white pill with a coloured dot and the text in the same colour (green = up to date, amber = can be updated,
+    // grey = not installed). It hugs the left edge of its control.
     class StatusLabel : BaseControl
     {
         public LabelKind Kind = LabelKind.None;
@@ -388,13 +379,13 @@ namespace OtzariaDict
         protected override void OnPaint(PaintEventArgs e)
         {
             Graphics g = e.Graphics;
-            g.Clear(Parent != null ? Parent.BackColor : Theme.Surface);
+            g.Clear(Parent != null ? Parent.BackColor : Theme.Window);
             g.SmoothingMode = SmoothingMode.AntiAlias; g.PixelOffsetMode = PixelOffsetMode.Half;
-            Font f = Theme.F(13, true);
-            Color back = Kind == LabelKind.Ok ? Theme.OkSoft : Kind == LabelKind.Warn ? Theme.WarnSoft : Theme.Pill;
-            Color fore = Kind == LabelKind.Ok ? Theme.OnOk : Kind == LabelKind.Warn ? Theme.OnWarn : Theme.TextSoft;
+            Font f = Theme.F(12.5f, true);
+            Color back = Theme.Card;
+            Color fore = Kind == LabelKind.Ok ? Theme.Ok : Kind == LabelKind.Warn ? Theme.OnWarn : Theme.TextSoft;
             Color dotColor = Kind == LabelKind.Ok ? Theme.Ok : Kind == LabelKind.Warn ? Theme.Warn : Theme.Mark;
-            int dot = Dpi.S(8), gap = Dpi.S(8), padL = Dpi.S(12), padR = Dpi.S(12);
+            int dot = Dpi.S(7), gap = Dpi.S(7), padL = Dpi.S(13), padR = Dpi.S(13);
             int tw;
             try { tw = TextRenderer.MeasureText(g, text, f, new Size(Width, Height), TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix | TextFormatFlags.SingleLine).Width; }
             catch (Exception) { tw = Width - dot - gap - padL - padR; }
@@ -408,8 +399,9 @@ namespace OtzariaDict
         }
     }
 
-    // the result of the last action, in a light coloured bar with a mark (a tick when it worked, "!" when it did not): its title in bold and
-    // under it the first sentence (the whole text is in the message window that opened with it). Title and text empty = nothing shown.
+    // the result of the last action, in a light green (or red) bar with rounded corners and a thin round mark (a tick when it worked,
+    // "!" when it did not): its title in bold and under it the first sentence (the whole text is in the message window that opened with
+    // it). Title and text empty = nothing shown.
     class InfoBar : BaseControl
     {
         public bool Ok = true;
@@ -422,24 +414,25 @@ namespace OtzariaDict
             g.Clear(Parent != null ? Parent.BackColor : Theme.Window);
             if (title.Length == 0 && text.Length == 0) return;
             g.SmoothingMode = SmoothingMode.AntiAlias; g.PixelOffsetMode = PixelOffsetMode.Half;
-            Gfx.Fill(g, ClientRectangle, Dpi.S(6), Ok ? Theme.OkSoft : Theme.ErrorSoft);
-            int m = Dpi.S(18);
-            Rectangle mark = new Rectangle(Width - Dpi.S(14) - m, Dpi.S(title.Length > 0 ? 8 : 14), m, m);
-            Gfx.Mark(g, mark, Ok ? MsgKind.Ok : MsgKind.Error, 13);
-            Color fore = Ok ? Theme.OnOk : Theme.OnError;
-            int left = Dpi.S(14), w = mark.X - Dpi.S(10) - left;
+            Gfx.Fill(g, ClientRectangle, Dpi.S(16), Ok ? Theme.OkSoft : Theme.ErrorSoft);
+            int m = Dpi.S(22);
+            Rectangle mark = new Rectangle(Width - Dpi.S(18) - m, title.Length > 0 ? Dpi.S(10) : (Height - m) / 2, m, m);
+            Gfx.LineMark(g, mark, Ok, Ok ? Theme.Ok : Theme.Error);
+            Color head = Ok ? Theme.OnOk : Theme.OnError, fore = Ok ? Theme.OnOkSoft : Theme.OnErrorSoft;
+            int left = Dpi.S(18), w = mark.X - Dpi.S(12) - left;
             if (title.Length == 0)
-                Gfx.TextAt(g, text, Theme.F(13.5f, false), fore, new Rectangle(left, Dpi.S(8), w, Height - Dpi.S(14)), Align.Right, false, true);
+                Gfx.TextAt(g, text, Theme.F(13, false), fore, new Rectangle(left, Dpi.S(8), w, Height - Dpi.S(16)), Align.Right, true, true);
             else
             {
-                // two lines, each cut with "…" if it is longer than the bar (the mark is centred on the first line)
+                // two lines, each cut with "…" if it is longer than the bar (the mark stands at the first line)
                 int top = mark.Y + m / 2 - Dpi.S(10);
-                Gfx.Line(g, title, Theme.F(13.5f, true), fore, new Rectangle(left, top, w, Dpi.S(20)));
-                Gfx.Line(g, text, Theme.F(13.5f, false), fore, new Rectangle(left, top + Dpi.S(20), w, Dpi.S(20)));
+                Gfx.Line(g, title, Theme.F(14, true), head, new Rectangle(left, top, w, Dpi.S(20)));
+                Gfx.Line(g, text, Theme.F(13, false), fore, new Rectangle(left, top + Dpi.S(20), w, Dpi.S(19)));
             }
         }
     }
 
+    // a thin round line that fills from the right while an action runs
     class ProgressLine : BaseControl
     {
         int val;
@@ -447,7 +440,7 @@ namespace OtzariaDict
         protected override void OnPaint(PaintEventArgs e)
         {
             Graphics g = e.Graphics;
-            g.Clear(Parent != null ? Parent.BackColor : Theme.Surface);
+            g.Clear(Parent != null ? Parent.BackColor : Theme.Window);
             g.SmoothingMode = SmoothingMode.AntiAlias; g.PixelOffsetMode = PixelOffsetMode.Half;
             Gfx.Fill(g, ClientRectangle, Height / 2, Theme.Track);
             int w = (int)(Width * (val / 100.0));
@@ -455,14 +448,13 @@ namespace OtzariaDict
         }
     }
 
-    enum BtnStyle { Filled, Outlined, Text, Tonal }
+    enum BtnStyle { Filled, Secondary, Text, Tonal }
 
-    // Filled = the blue button · Outlined = white with a light border · Tonal = light blue, no border (a quiet blue button) · Text = no frame.
-    // Rounded corners (6), semibold text.
+    // A round ("pill") button, flat: Filled = blue with white text · Secondary = light grey · Tonal = light blue with blue text (a quiet
+    // blue button) · Text = only the text, a light blue shape comes under the mouse. Semibold text.
     class FlatBtn : BaseControl
     {
         public BtnStyle Style = BtnStyle.Filled;
-        public bool Light;   // quiet secondary button: regular weight text
         public bool Small;   // small text (the buttons inside a row of the word list)
         bool hover, down, viaMouse;
         string subText = "";
@@ -505,89 +497,70 @@ namespace OtzariaDict
         protected override void OnPaint(PaintEventArgs e)
         {
             Graphics g = e.Graphics;
-            Color page = Parent != null ? Parent.BackColor : Theme.Surface;
+            Color page = Parent != null ? Parent.BackColor : Theme.Window;
             g.Clear(page);
             g.SmoothingMode = SmoothingMode.AntiAlias; g.PixelOffsetMode = PixelOffsetMode.Half;   // Half: whole numbers are pixel EDGES, so shapes and lines land exactly on pixels
             Rectangle r = ClientRectangle;
-            int rad = Dpi.S(Small ? 5 : 8);
-            Color fg = Theme.Primary;
-            // 3.1 (the user: softer, with a "bubble" like Windows): the button floats a little over its shadow, its face is lighter at the top
-            // with a soft sheen, and its edge is a shade darker at the bottom. Under the mouse it rises a little; pressed, it sits down.
-            bool solid = Style != BtnStyle.Text;
-            int lift = !Enabled || !solid ? 0 : down ? 1 : (Small ? 1 : 2) + (hv > 0.5f ? 1 : 0);
-            int room = solid ? (Small ? 1 : 3) : 0;   // the shadow's place under the button
-            Rectangle body = new Rectangle(r.X + (solid ? 1 : 0), r.Y + (down ? 1 : 0), r.Width - (solid ? 2 : 0), r.Height - room);
-            Color face, faceTop, edge;
+            int rad = r.Height / 2;
+            // 3.1 (the owner's choice, design B): flat - one colour, no shadow, no sheen; under the mouse the colour turns a shade
+            // darker softly (hv), pressed a shade more
+            Color fg, face;
             if (!Enabled)
             {
                 fg = Theme.DisabledText;
-                face = Style == BtnStyle.Outlined || Style == BtnStyle.Text ? Theme.Card : Theme.DisabledBack;
-                faceTop = face;
-                edge = Style == BtnStyle.Outlined ? Theme.DisabledLine : face;
-                if (Style == BtnStyle.Text) face = faceTop = edge = page;
+                face = Style == BtnStyle.Text ? page : Theme.DisabledBack;
             }
             else if (Style == BtnStyle.Filled)
             {
                 fg = Theme.OnPrimary;
                 face = down ? Theme.PrimaryDark : Gfx.Mix(Theme.Primary, Theme.PrimaryHover, hv);
-                faceTop = Gfx.Mix(face, Color.White, down ? 0.06f : 0.16f);
-                edge = Gfx.Mix(face, Color.Black, 0.22f);
             }
             else if (Style == BtnStyle.Tonal)
             {
                 fg = Theme.Primary;
                 face = down ? Theme.SoftPill : Gfx.Mix(Theme.Soft, Theme.SoftHover, hv);
-                faceTop = Gfx.Mix(face, Color.White, 0.55f);
-                edge = Gfx.Mix(face, Theme.Primary, 0.18f);
             }
-            else if (Style == BtnStyle.Outlined)
+            else if (Style == BtnStyle.Secondary)
             {
                 fg = Theme.Text;
-                face = down ? Theme.BtnPress : Gfx.Mix(Theme.Card, Theme.BtnHover, hv);
-                faceTop = down ? face : Color.White;
-                face = Gfx.Mix(face, Theme.BtnPress, down ? 0f : 0.35f);
-                edge = Gfx.Mix(Theme.Stroke, Theme.BorderHover, hv);
+                face = down ? Theme.SecondaryPress : Gfx.Mix(Theme.Secondary, Theme.SecondaryHover, hv);
             }
             else
             {
+                fg = Theme.Primary;
                 face = down ? Theme.SoftHover : Gfx.Mix(page, Theme.Soft, hv);
-                faceTop = face; edge = face;
             }
-            if (lift > 0) Gfx.Shadow(g, body, rad, lift);
-            if (solid || hv > 0.01f || down)
+            if (Style != BtnStyle.Text || hv > 0.01f || down) Gfx.Fill(g, r, rad, face);
+            if (Focused && Enabled && !viaMouse && ShowFocusCues)   // ShowFocusCues: like every Windows button, the mark appears only once the keyboard (Tab) is used
             {
-                Gfx.Fill(g, body, rad, edge);
-                // the edge: one pixel all round, two at the bottom (a shade darker there, as Windows 11 draws its buttons)
-                Rectangle inner = new Rectangle(body.X + Dpi.Hair, body.Y + Dpi.Hair, body.Width - 2 * Dpi.Hair, body.Height - 2 * Dpi.Hair - (solid && !down ? Dpi.Hair : 0));
-                if (inner.Width > 0 && inner.Height > 0)
-                    Gfx.Bubble(g, inner, Math.Max(0, rad - Dpi.Hair), faceTop, face, Enabled && solid && !down ? (Style == BtnStyle.Filled ? 46 : 70) : 0);
+                int i = Dpi.S(3);
+                Gfx.Ring(g, Rectangle.Inflate(r, -i, -i), rad - i, Style == BtnStyle.Filled ? Theme.OnPrimary : Theme.Primary, Math.Max(2, Dpi.S(2)));
             }
-            if (Focused && Enabled && !viaMouse && ShowFocusCues)   // ShowFocusCues: like every Windows button, the frame appears only once the keyboard (Tab) is used
-                Gfx.Frame(g, Rectangle.Inflate(body, -Dpi.S(3), -Dpi.S(3)), Style == BtnStyle.Filled ? Theme.OnPrimary : Theme.Primary, Dpi.S(2));
-            r = body;
 
-            Font f = Theme.F(Small ? 13 : (Style == BtnStyle.Filled ? 15 : 14), !Light);
+            Font f = Theme.F(Small ? 13 : 15, true);
+            int side = Math.Max(Dpi.S(8), rad / 2);
             if (subText.Length == 0)
-                Gfx.TextAt(g, Text, f, fg, new Rectangle(Dpi.S(8), r.Y, Width - Dpi.S(16), r.Height), Align.Center, true, false);
+                Gfx.TextAt(g, Text, f, fg, new Rectangle(side, 0, Width - 2 * side, r.Height), Align.Center, true, false);
             else
             {
                 Color sub = Enabled ? (Style == BtnStyle.Filled ? Theme.OnPrimarySoft : Theme.TextSoft) : fg;
-                int top = r.Y + (r.Height - Dpi.S(40)) / 2;
-                Gfx.TextAt(g, Text, f, fg, new Rectangle(Dpi.S(8), top, Width - Dpi.S(16), Dpi.S(22)), Align.Center, true, false);
-                Gfx.TextAt(g, subText, Theme.F(12.5f, false), sub, new Rectangle(Dpi.S(8), top + Dpi.S(22), Width - Dpi.S(16), Dpi.S(18)), Align.Center, true, false);
+                int top = (r.Height - Dpi.S(38)) / 2;
+                Gfx.TextAt(g, Text, Theme.F(15.5f, true), fg, new Rectangle(side, top, Width - 2 * side, Dpi.S(21)), Align.Center, true, false);
+                Gfx.TextAt(g, subText, Theme.F(12, false), sub, new Rectangle(side, top + Dpi.S(21), Width - 2 * side, Dpi.S(17)), Align.Center, true, false);
             }
         }
     }
 
     enum Glyph { Pencil, Folder, Double, Trash }
 
-    // a quiet button of the tools row: a small drawn icon and the text next to it, no frame; light grey under the mouse
+    // one of the four tools under the main buttons (3.1, design B): a white tile with rounded corners, a drawn line icon in a light blue
+    // circle, and the name under it. Under the mouse the tile turns a little blue and a light blue ring comes round it (softly: hv 0 -> 1).
     class IconBtn : BaseControl
     {
         public Glyph Icon;
         bool hover, down, viaMouse;
         public IconBtn() { Cursor = Cursors.Hand; TabStop = true; AccessibleRole = AccessibleRole.PushButton; }
-        // 3.1: under the mouse a soft raised "bubble" comes up gently (hv: 0 -> 1), and goes down again when the mouse leaves
+        // the mouse comes and goes softly: hv slides from 0 to 1 (and back) in a short moment, the colours with it
         float hv;
         System.Windows.Forms.Timer fade;
         void Fade()
@@ -624,83 +597,81 @@ namespace OtzariaDict
         protected override void OnPaint(PaintEventArgs e)
         {
             Graphics g = e.Graphics;
-            Color page = Parent != null ? Parent.BackColor : Theme.Card;
+            Color page = Parent != null ? Parent.BackColor : Theme.Window;
             g.Clear(page);
             g.SmoothingMode = SmoothingMode.AntiAlias; g.PixelOffsetMode = PixelOffsetMode.Half;
-            if (Enabled && (hv > 0.01f || down))
+            Rectangle r = ClientRectangle;
+            int rad = Dpi.S(16);
+            float h = Enabled ? hv : 0f;
+            Gfx.Fill(g, r, rad, down && Enabled ? Theme.Soft : Gfx.Mix(Theme.Card, Theme.CardHover, h));
+            if (h > 0.01f || (down && Enabled)) Gfx.Ring(g, r, rad, Gfx.Mix(Theme.Card, Theme.RingHover, down ? 1f : h), Math.Max(2, Dpi.S(2)));
+            if (Focused && Enabled && !viaMouse && ShowFocusCues)
             {
-                Rectangle body = new Rectangle(1, down ? 1 : 0, Width - 2, Height - Dpi.S(3));
-                if (!down) Gfx.Shadow(g, body, Dpi.S(8), 2);
-                Color edge = Gfx.Mix(page, Theme.Border, hv), top = Gfx.Mix(page, Color.White, hv), bottom = Gfx.Mix(page, down ? Theme.BtnPress : Theme.BtnHover, hv);
-                Gfx.Fill(g, body, Dpi.S(8), edge);
-                Gfx.Bubble(g, Rectangle.Inflate(body, -Dpi.Hair, -Dpi.Hair), Dpi.S(8) - Dpi.Hair, top, bottom, down ? 0 : (int)(60 * hv));
+                int i = Dpi.S(3);
+                Gfx.Ring(g, Rectangle.Inflate(r, -i, -i), rad - i, Theme.Primary, Math.Max(2, Dpi.S(2)));
             }
-            if (Focused && Enabled && !viaMouse && ShowFocusCues) Gfx.Frame(g, Rectangle.Inflate(ClientRectangle, -Dpi.S(2), -Dpi.S(2)), Theme.Primary, Dpi.S(2));
-            Font f = Theme.F(14, false);
-            Color fg = Enabled ? Theme.Text : Theme.DisabledText, ic = Enabled ? Theme.Primary : Theme.DisabledText;
-            int icon = Dpi.S(18), gap = Dpi.S(8);
-            int tw;
-            try { tw = TextRenderer.MeasureText(g, Text, f, new Size(Width, Height), TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix | TextFormatFlags.SingleLine).Width; }
-            catch (Exception) { tw = Width / 2; }
-            tw = Math.Min(tw, Width - icon - gap - Dpi.S(12));
-            int total = icon + gap + tw, x0 = (Width - total) / 2;
-            // right to left: the icon on the right, the text on its left
-            Rectangle ir = new Rectangle(x0 + tw + gap, (Height - icon) / 2, icon, icon);
-            DrawGlyph(g, Icon, ir, ic);
-            Gfx.TextAt(g, Text, f, fg, new Rectangle(x0 - Dpi.S(2), 0, tw + Dpi.S(4), Height), Align.Center, true, false);
+            // the icon in its circle, in the middle of the upper part; the name under it
+            int d = Dpi.S(32);
+            Rectangle circle = new Rectangle((Width - d) / 2, Dpi.S(11), d, d);
+            Gfx.Dot(g, circle, Enabled ? Gfx.Mix(Theme.IconBack, Theme.SoftPill, down ? 1f : h) : Theme.DisabledBack);
+            int pad = Dpi.S(6);
+            DrawGlyph(g, Icon, Rectangle.Inflate(circle, -pad, -pad), Enabled ? Theme.Primary : Theme.DisabledText);
+            Gfx.TextAt(g, Text, Theme.F(13.5f, false), Enabled ? Theme.Text : Theme.DisabledText,
+                       new Rectangle(Dpi.S(6), circle.Bottom + Dpi.S(5), Width - Dpi.S(12), Dpi.S(19)), Align.Center, true, false);
         }
 
-        // simple line icons, drawn (no icon font is needed): a pencil, a folder, two lines of the same word, a bin
+        // simple line icons, drawn (no icon font is needed), in units of 24: a pencil, a folder, "=" (a word twice), a bin
         public static void DrawGlyph(Graphics g, Glyph kind, Rectangle r, Color c)
         {
-            float k = r.Width / 18f, x = r.X, y = r.Y;
-            using (Pen p = new Pen(c, 1.6f * k))
+            float k = r.Width / 24f, x = r.X, y = r.Y;
+            using (Pen p = Gfx.IconPen(c, Math.Max(1.6f, 1.75f * k)))
             {
-                p.StartCap = LineCap.Round; p.EndCap = LineCap.Round; p.LineJoin = LineJoin.Round;
                 if (kind == Glyph.Pencil)
                 {
-                    g.DrawPolygon(p, new PointF[] { new PointF(x + 12.5f * k, y + 2.5f * k), new PointF(x + 15.5f * k, y + 5.5f * k), new PointF(x + 6f * k, y + 15f * k),
-                                                    new PointF(x + 2.5f * k, y + 15.5f * k), new PointF(x + 3f * k, y + 12f * k) });
-                    g.DrawLine(p, x + 10.5f * k, y + 4.5f * k, x + 13.5f * k, y + 7.5f * k);
+                    g.DrawPolygon(p, new PointF[] { new PointF(x + 4f * k, y + 20f * k), new PointF(x + 8f * k, y + 20f * k), new PointF(x + 19f * k, y + 9f * k),
+                                                    new PointF(x + 15f * k, y + 5f * k), new PointF(x + 4f * k, y + 16f * k) });
+                    g.DrawLine(p, x + 13.5f * k, y + 6.5f * k, x + 17.5f * k, y + 10.5f * k);
                 }
                 else if (kind == Glyph.Folder)
                 {
-                    g.DrawPolygon(p, new PointF[] { new PointF(x + 2f * k, y + 4.5f * k), new PointF(x + 7f * k, y + 4.5f * k), new PointF(x + 8.5f * k, y + 6.5f * k),
-                                                    new PointF(x + 16f * k, y + 6.5f * k), new PointF(x + 16f * k, y + 14.5f * k), new PointF(x + 2f * k, y + 14.5f * k) });
-                    g.DrawLine(p, x + 2f * k, y + 8.5f * k, x + 16f * k, y + 8.5f * k);
+                    // a folder with rounded corners, its tab on the upper left
+                    using (GraphicsPath f = new GraphicsPath())
+                    {
+                        float a = 4f * k;   // the diameter of a corner
+                        f.AddArc(x + 3f * k, y + 5.5f * k, a, a, 180, 90);
+                        f.AddLine(x + 5f * k, y + 5.5f * k, x + 9f * k, y + 5.5f * k);
+                        f.AddLine(x + 9f * k, y + 5.5f * k, x + 11f * k, y + 7.5f * k);
+                        f.AddLine(x + 11f * k, y + 7.5f * k, x + 19f * k, y + 7.5f * k);
+                        f.AddArc(x + 17f * k, y + 7.5f * k, a, a, 270, 90);
+                        f.AddArc(x + 17f * k, y + 15.5f * k, a, a, 0, 90);
+                        f.AddArc(x + 3f * k, y + 15.5f * k, a, a, 90, 90);
+                        f.CloseFigure();
+                        g.DrawPath(p, f);
+                    }
                 }
                 else if (kind == Glyph.Double)
                 {
-                    g.DrawLine(p, x + 2.5f * k, y + 6f * k, x + 8f * k, y + 6f * k);
-                    g.DrawLine(p, x + 10f * k, y + 6f * k, x + 15.5f * k, y + 6f * k);
-                    g.DrawLine(p, x + 2.5f * k, y + 12f * k, x + 8f * k, y + 12f * k);
-                    g.DrawLine(p, x + 10f * k, y + 12f * k, x + 15.5f * k, y + 12f * k);
+                    g.DrawLine(p, x + 5f * k, y + 9f * k, x + 19f * k, y + 9f * k);
+                    g.DrawLine(p, x + 5f * k, y + 15f * k, x + 19f * k, y + 15f * k);
                 }
                 else
                 {
-                    g.DrawLine(p, x + 3f * k, y + 5f * k, x + 15f * k, y + 5f * k);
-                    g.DrawLine(p, x + 7f * k, y + 5f * k, x + 7.5f * k, y + 3f * k);
-                    g.DrawLine(p, x + 7.5f * k, y + 3f * k, x + 10.5f * k, y + 3f * k);
-                    g.DrawLine(p, x + 10.5f * k, y + 3f * k, x + 11f * k, y + 5f * k);
-                    g.DrawPolygon(p, new PointF[] { new PointF(x + 4.5f * k, y + 5f * k), new PointF(x + 13.5f * k, y + 5f * k), new PointF(x + 12.5f * k, y + 15.5f * k), new PointF(x + 5.5f * k, y + 15.5f * k) });
-                    g.DrawLine(p, x + 7.8f * k, y + 8f * k, x + 8f * k, y + 13f * k);
-                    g.DrawLine(p, x + 10.2f * k, y + 8f * k, x + 10f * k, y + 13f * k);
+                    g.DrawLine(p, x + 4f * k, y + 7f * k, x + 20f * k, y + 7f * k);
+                    g.DrawLines(p, new PointF[] { new PointF(x + 9.5f * k, y + 7f * k), new PointF(x + 9.5f * k, y + 4.5f * k), new PointF(x + 14.5f * k, y + 4.5f * k), new PointF(x + 14.5f * k, y + 7f * k) });
+                    g.DrawLines(p, new PointF[] { new PointF(x + 6.5f * k, y + 7f * k), new PointF(x + 7.5f * k, y + 19.5f * k), new PointF(x + 16.5f * k, y + 19.5f * k), new PointF(x + 17.5f * k, y + 7f * k) });
                 }
             }
         }
     }
 
-    enum RowPos { First, Middle, Last }
-
-    // One card of the choice (three of them, one under the other, with a small gap): a round mark (pick one) or a switch (CheckStyle, on/off).
-    // A white card with rounded corners and a light border; the chosen one is light blue with a blue border. The word count is a pill on the left.
+    // One card of the choice (three of them, one under the other, with a gap): a round mark (pick one) or a switch (CheckStyle, on/off).
+    // A white card with big rounded corners and no border; the chosen one is light blue with a blue ring. The word count is a pill on the left.
     class OptionRow : BaseControl
     {
         public string Title = "", Desc = "", Count = "";
         public bool CheckStyle;
         public bool CountRoom = true;   // keep the place of the count pill also while Count is empty (the main window fills it in later)
         public bool Highlight = true;   // the chosen card is light blue with a blue border (false: only its switch shows it - a list of choices)
-        public RowPos Pos = RowPos.Middle;   // (kept for the callers; every card draws its whole frame now)
         bool selected, hover, viaMouse;
         public event EventHandler Chosen;
         public bool Selected
@@ -758,65 +729,67 @@ namespace OtzariaDict
             Graphics g = e.Graphics;
             g.SmoothingMode = SmoothingMode.AntiAlias; g.PixelOffsetMode = PixelOffsetMode.Half;   // Half: whole numbers are pixel EDGES, so shapes and lines land exactly on pixels
             g.Clear(Parent != null ? Parent.BackColor : Theme.Window);
-            // 3.1: the card floats a little over a soft shadow (more under the mouse)
-            Rectangle r = new Rectangle(1, 0, Width - 2, Height - Dpi.S(3));
-            int rad = Dpi.S(10);
+            // 3.1 (design B): flat - no border and no shadow; the chosen card is light blue with a blue ring, a card under the mouse gets
+            // a light blue ring
+            Rectangle r = ClientRectangle;
+            int rad = Dpi.S(18), ringW = Math.Max(2, Dpi.S(2));
             bool lit = selected && Highlight;
-            Color back = lit ? Theme.Soft : (hover ? Theme.RowHover : Theme.Card);
-            Gfx.Shadow(g, r, rad, hover || lit ? 3 : 2);
-            if (lit) Gfx.Box(g, r, rad, back, Theme.Primary, Math.Max(2, Dpi.S(2)));
-            else Gfx.Box(g, r, rad, back, hover ? Theme.BorderHover : Theme.Border, Dpi.Hair);
-            if (Focused && !viaMouse && ShowFocusCues) Gfx.Frame(g, Rectangle.Inflate(r, -Dpi.S(5), -Dpi.S(5)), Theme.Primary, Dpi.S(2));
+            Color back = lit ? Theme.Soft : (hover ? Theme.CardHover : Theme.Card);
+            Gfx.Fill(g, r, rad, back);
+            if (lit) Gfx.Ring(g, r, rad, Theme.Primary, ringW);
+            else if (hover) Gfx.Ring(g, r, rad, Theme.RingHover, ringW);
+            if (Focused && !viaMouse && ShowFocusCues)
+            {
+                int i = Dpi.S(5);
+                Gfx.Ring(g, Rectangle.Inflate(r, -i, -i), rad - i, Theme.Primary, ringW);
+            }
 
             // the mark on the right: a round mark, or a switch
             int markRight = r.Right - Dpi.S(20);
             int markLeft;
             if (CheckStyle)
             {
-                Rectangle sw = new Rectangle(markRight - Dpi.S(42), r.Y + (r.Height - Dpi.S(22)) / 2, Dpi.S(42), Dpi.S(22));
+                Rectangle sw = new Rectangle(markRight - Dpi.S(44), r.Y + (r.Height - Dpi.S(26)) / 2, Dpi.S(44), Dpi.S(26));
                 float p = SwitchPos();   // 0 = off (the knob on the right), 1 = on (the knob on the left: right to left)
-                int knob = Dpi.S(hover ? 14 : 12), pad = (sw.Height - knob) / 2;
-                Color track = Gfx.Mix(back, Theme.Primary, p), ring = Gfx.Mix(Theme.Mark, Theme.Primary, p);
-                Gfx.Box(g, sw, sw.Height / 2, track, ring, Dpi.Hair);
+                int knob = Dpi.S(18), pad = (sw.Height - knob) / 2;
+                Gfx.Fill(g, sw, sw.Height / 2, Gfx.Mix(hover ? Theme.SwitchOffHover : Theme.SwitchOff, hover ? Theme.PrimaryHover : Theme.Primary, p));
                 int kx = (int)Math.Round((sw.Right - pad - knob) + ((sw.X + pad) - (sw.Right - pad - knob)) * p);
-                Rectangle kr = new Rectangle(kx, sw.Y + pad, knob, knob);
-                if (p > 0.5f) Gfx.Shadow(g, kr, knob / 2, 1);
-                Gfx.Dot(g, kr, Gfx.Mix(Theme.Mark, Theme.OnPrimary, p));
+                Gfx.Dot(g, new Rectangle(kx, sw.Y + pad, knob, knob), Theme.OnPrimary);
                 markLeft = sw.X;
             }
             else
             {
-                int m = Dpi.S(20);
+                int m = Dpi.S(22);
                 Rectangle dot = new Rectangle(markRight - m, r.Y + (r.Height - m) / 2, m, m);
                 if (selected)
                 {
                     Gfx.Dot(g, dot, Theme.Primary);
-                    Gfx.Dot(g, Rectangle.Inflate(dot, -Dpi.S(6), -Dpi.S(6)), Theme.OnPrimary);
+                    Gfx.Dot(g, Rectangle.Inflate(dot, -Dpi.S(7), -Dpi.S(7)), Theme.OnPrimary);
                 }
-                else Gfx.RingDot(g, dot, back, Theme.Mark, Math.Max(1, (int)Math.Round(1.5f * Dpi.Scale)));
+                else Gfx.RingDot(g, dot, back, hover ? Theme.MarkHover : Theme.Mark, ringW);
                 markLeft = dot.X;
             }
 
             // the number of words: a pill on the left
-            Font cf = Theme.F(13, true);
+            Font cf = Theme.F(12.5f, true);
             int pillW = 0;
             if (Count.Length > 0)
             {
                 int tw;
                 try { tw = TextRenderer.MeasureText(g, Count, cf, new Size(Width, Height), TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix | TextFormatFlags.SingleLine).Width; }
                 catch (Exception) { tw = Dpi.S(90); }
-                pillW = tw + Dpi.S(24);
+                pillW = tw + Dpi.S(26);
                 Rectangle pill = new Rectangle(r.X + Dpi.S(20), r.Y + (r.Height - Dpi.S(28)) / 2, pillW, Dpi.S(28));
-                Gfx.Fill(g, pill, pill.Height / 2, selected ? Theme.SoftPill : Theme.Pill);
-                Gfx.TextAt(g, Count, cf, selected ? Theme.PrimaryDark : Theme.TextSoft, pill, Align.Center, true, false);
+                Gfx.Fill(g, pill, pill.Height / 2, lit ? Theme.SoftPill : Theme.Pill);
+                Gfx.TextAt(g, Count, cf, lit ? Theme.OnSoftPill : Theme.OnPill, pill, Align.Center, true, false);
             }
 
             int textRight = markLeft - Dpi.S(16);
             // (a card without a count - the choices of the advanced removal - gives its text the whole width)
             int textLeft = r.X + Dpi.S(20) + (Count.Length > 0 || CountRoom ? Math.Max(pillW, Dpi.S(110)) + Dpi.S(20) : 0);
             int top = r.Y + (r.Height - Dpi.S(62)) / 2;   // title (22) + two lines of description (2 x 20) = 62, in the middle of the card
-            Gfx.TextAt(g, Title, Theme.F(16, true), Theme.Text, new Rectangle(textLeft, top, textRight - textLeft, Dpi.S(22)), Align.Right, true, false);
-            Gfx.TextAt(g, Desc, Theme.F(13.5f, false), Theme.TextSoft, new Rectangle(textLeft, top + Dpi.S(23), textRight - textLeft, Dpi.S(40)), Align.Right, false, true);
+            Gfx.TextAt(g, Title, Theme.F(15.5f, true), Theme.Text, new Rectangle(textLeft, top, textRight - textLeft, Dpi.S(22)), Align.Right, true, false);
+            Gfx.TextAt(g, Desc, Theme.F(13, false), Theme.TextSoft, new Rectangle(textLeft, top + Dpi.S(23), textRight - textLeft, Dpi.S(40)), Align.Right, false, true);
         }
     }
 
@@ -835,29 +808,37 @@ namespace OtzariaDict
             AutoScaleMode = AutoScaleMode.None;
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = false; MinimizeBox = false; ShowInTaskbar = false;
-            StartPosition = FormStartPosition.CenterParent;
-            BackColor = Theme.Card;
+            if (Dpi.Forced) { StartPosition = FormStartPosition.Manual; Location = new Point(0, 0); }   // the developer's screenshots
+            else StartPosition = FormStartPosition.CenterParent;
+            BackColor = Theme.Window;
             Font = Theme.F(14, false);
-            ClientSize = Dpi.Sz(560, 360);
             Icon = MainForm.AppIcon();
 
             string job = installing ? "ההתקנה" : "ההסרה";
             string goOn = installing
                 ? "המילון יותקן, אבל וורד יכיר אותו רק אחרי שתסגרו אותו ותפתחו אותו מחדש."
                 : "המילון יוסר, אבל וורד יפסיק להשתמש בו רק אחרי שתסגרו אותו ותפתחו אותו מחדש.";
-            TextBlock head = new TextBlock { Bounds = Dpi.R(28, 20, 504, 34), Font = Theme.F(22, true), Color = Theme.Text, VCenter = true, Wrap = false, Text = "וורד פתוח עכשיו" };
+            MarkTitle head = new MarkTitle { Bounds = Dpi.R(28, 24, 504, 32), Kind = MsgKind.Warn, Font = Theme.F(20, true), Text = "וורד פתוח עכשיו" };
             TextBlock body = new TextBlock
             {
-                Bounds = Dpi.R(28, 64, 504, 214), Font = Theme.F(14, false), Color = Theme.Text,
+                Bounds = Dpi.R(28, 68, 504, 212), Font = Theme.F(14, false), Color = Theme.Text,
                 Text = "וורד טוען את המילונים רק כשהוא נפתח, ולכן כדאי לסגור אותו לפני " + job + ".\r\n\r\n"
                      + "שמרו את המסמכים, סגרו את כל חלונות וורד ולחצו על \"בדוק שוב\".\r\n\r\n"
                      + "אין חלון וורד פתוח? ייתכן שוורד רץ ברקע, למשל בגלל תוכנה אחרת. חכו רגע ולחצו שוב, ואם זה לא עוזר, הפעילו את המחשב מחדש.\r\n\r\n"
                      + "אפשר גם ללחוץ על \"המשך בכל זאת\": " + goOn
             };
-            LowerPanel strip = new LowerPanel { Bounds = Dpi.R(0, 280, 560, 80) };
-            FlatBtn again = new FlatBtn { Bounds = Dpi.R(372, 18, 160, 44), Text = "בדוק שוב", Style = BtnStyle.Filled };
-            FlatBtn goOnBtn = new FlatBtn { Bounds = Dpi.R(180, 18, 180, 44), Text = "המשך בכל זאת", Style = BtnStyle.Outlined };
-            FlatBtn cancel = new FlatBtn { Bounds = Dpi.R(58, 18, 110, 44), Text = "ביטול", Style = BtnStyle.Outlined };
+            // the text as high as it is with the fonts of this computer, the buttons 26 under it
+            try
+            {
+                body.Height = TextRenderer.MeasureText(body.Text, body.Font, new Size(body.Width, int.MaxValue),
+                    TextFormatFlags.RightToLeft | TextFormatFlags.NoPrefix | TextFormatFlags.WordBreak | TextFormatFlags.TextBoxControl).Height + Dpi.S(4);
+            }
+            catch (Exception) { }
+            LowerPanel strip = new LowerPanel { Bounds = new Rectangle(0, body.Bottom + Dpi.S(26), Dpi.S(560), Dpi.S(68)) };
+            ClientSize = new Size(Dpi.S(560), strip.Bottom);
+            FlatBtn again = new FlatBtn { Bounds = Dpi.R(372, 0, 160, 44), Text = "בדוק שוב", Style = BtnStyle.Filled };
+            FlatBtn goOnBtn = new FlatBtn { Bounds = Dpi.R(180, 0, 180, 44), Text = "המשך בכל זאת", Style = BtnStyle.Secondary };
+            FlatBtn cancel = new FlatBtn { Bounds = Dpi.R(58, 0, 110, 44), Text = "ביטול", Style = BtnStyle.Secondary };
             again.Click += delegate { Choice = Again; Close(); };
             goOnBtn.Click += delegate { Choice = GoOn; Close(); };
             cancel.Click += delegate { Choice = Cancel; Close(); };
@@ -876,25 +857,26 @@ namespace OtzariaDict
     // ------------------------------------------------------------------------------------------ a message or a question
     enum MsgKind { Ok, Info, Warn, Error, Question }
 
-    // the title of a message window: a round mark at its start (on the right), then the text (it may take two lines)
+    // the title of a message window: a light round mark at its start (on the right), then the text (it may take two lines)
     class MarkTitle : BaseControl
     {
         public MsgKind Kind = MsgKind.Info;
+        public const int MarkUnits = 30, GapUnits = 12;   // the mark and the gap after it, in design units
         protected override void OnPaint(PaintEventArgs e)
         {
             Graphics g = e.Graphics;
-            g.Clear(Parent != null ? Parent.BackColor : Theme.Card);
+            g.Clear(Parent != null ? Parent.BackColor : Theme.Window);
             g.SmoothingMode = SmoothingMode.AntiAlias; g.PixelOffsetMode = PixelOffsetMode.Half;
-            int mark = Dpi.S(24), gap = Dpi.S(12), line = Dpi.S(32);
+            int mark = Dpi.S(MarkUnits), gap = Dpi.S(GapUnits), line = Dpi.S(32);
             Rectangle m = new Rectangle(Width - mark, (line - mark) / 2, mark, mark);
-            Gfx.Mark(g, m, Kind, 15);
+            Gfx.SoftMark(g, m, Kind);
             Gfx.TextAt(g, Text, Font, Theme.Text, new Rectangle(0, 0, m.X - gap, Height), Align.Right, Height <= line, true);
         }
     }
 
     // 3.1: a message or a question in the look of the program, instead of the plain message box of Windows - a title with a round mark,
-    // the text, and the buttons (in Hebrew on every Windows) on the light strip at the bottom. The window is as high as its text;
-    // a very long text scrolls. Escape and the close box give the safe answer.
+    // the text, and round buttons (in Hebrew on every Windows) at the bottom. The window is as high as its text; a very long text
+    // scrolls. Escape and the close box give the safe answer.
     class MsgDialog : Form
     {
         DialogResult answer;
@@ -912,7 +894,7 @@ namespace OtzariaDict
             MaximizeBox = false; MinimizeBox = false; ShowInTaskbar = false;
             if (Dpi.Forced) { StartPosition = FormStartPosition.Manual; Location = new Point(0, 0); }   // the developer's screenshots
             else StartPosition = FormStartPosition.CenterParent;
-            BackColor = Theme.Card;
+            BackColor = Theme.Window;
             Font = Theme.F(14, false);
             Icon = MainForm.AppIcon();
             // a screen reader announces a dialog, its title and its text (the text is painted, so it is given here too)
@@ -923,19 +905,19 @@ namespace OtzariaDict
 
             int width = Dpi.S(520), pad = Dpi.S(28), inner = width - 2 * pad;
             Font titleFont = Theme.F(20, true), bodyFont = Theme.F(14, false);
-            int titleW = inner - Dpi.S(24) - Dpi.S(12);
+            int titleW = inner - Dpi.S(MarkTitle.MarkUnits) - Dpi.S(MarkTitle.GapUnits);
             int titleH = Math.Max(Dpi.S(32), TextRenderer.MeasureText(title, titleFont, new Size(titleW, int.MaxValue), Wrap).Height + Dpi.S(2));
-            MarkTitle head = new MarkTitle { Bounds = new Rectangle(pad, Dpi.S(22), inner, titleH), Kind = kind, Font = titleFont, Text = title };
+            MarkTitle head = new MarkTitle { Bounds = new Rectangle(pad, Dpi.S(24), inner, titleH), Kind = kind, Font = titleFont, Text = title };
             head.AccessibleName = title; head.AccessibleRole = AccessibleRole.StaticText;
 
             // the text: as high as it needs, up to what the screen has room for; beyond that it scrolls
-            int top = head.Bottom + Dpi.S(10);
+            int top = head.Bottom + Dpi.S(12);
             int need = TextRenderer.MeasureText(text, bodyFont, new Size(inner, int.MaxValue), Wrap).Height + Dpi.S(4);
             int room = Dpi.S(440);
             try
             {
                 int frame = SystemInformation.CaptionHeight + 2 * SystemInformation.FixedFrameBorderSize.Height + Dpi.S(16);
-                room = Math.Min(room, Screen.PrimaryScreen.WorkingArea.Height - frame - top - Dpi.S(24 + 76));
+                room = Math.Min(room, Screen.PrimaryScreen.WorkingArea.Height - frame - top - Dpi.S(26 + 68));
             }
             catch (Exception) { }
             room = Math.Max(room, Dpi.S(120));
@@ -946,20 +928,20 @@ namespace OtzariaDict
                 body = new TextBox
                 {
                     Bounds = new Rectangle(pad, top, inner, room), Multiline = true, ReadOnly = true, ScrollBars = ScrollBars.Vertical, WordWrap = true,
-                    BorderStyle = BorderStyle.None, BackColor = Theme.Card, ForeColor = Theme.Text, Font = bodyFont, RightToLeft = RightToLeft.Yes,
+                    BorderStyle = BorderStyle.None, BackColor = Theme.Window, ForeColor = Theme.Text, Font = bodyFont, RightToLeft = RightToLeft.Yes,
                     TabStop = true, Text = text   // reachable with Tab, to scroll and copy with the keyboard
                 };
             body.AccessibleName = text; body.AccessibleRole = AccessibleRole.StaticText;
 
-            LowerPanel strip = new LowerPanel { Bounds = new Rectangle(0, body.Bottom + Dpi.S(24), width, Dpi.S(76)) };
+            LowerPanel strip = new LowerPanel { Bounds = new Rectangle(0, body.Bottom + Dpi.S(26), width, Dpi.S(68)) };
             List<FlatBtn> buttons = new List<FlatBtn>();
             int x = width - pad;
             for (int i = 0; i < labels.Length; i++)
             {
-                Font f = Theme.F(i == 0 ? 15 : 14, true);   // the fonts FlatBtn draws them with
-                int w = Math.Max(Dpi.S(110), TextRenderer.MeasureText(labels[i], f).Width + Dpi.S(40));
+                Font f = Theme.F(15, true);   // the font FlatBtn draws them with
+                int w = Math.Max(Dpi.S(110), TextRenderer.MeasureText(labels[i], f).Width + Dpi.S(48));
                 x -= w;
-                FlatBtn b = new FlatBtn { Bounds = new Rectangle(x, Dpi.S(16), w, Dpi.S(44)), Text = labels[i], Style = i == 0 ? BtnStyle.Filled : BtnStyle.Outlined };
+                FlatBtn b = new FlatBtn { Bounds = new Rectangle(x, 0, w, Dpi.S(44)), Text = labels[i], Style = i == 0 ? BtnStyle.Filled : BtnStyle.Secondary };
                 b.AccessibleName = labels[i];
                 b.AccessibleRole = AccessibleRole.PushButton;
                 DialogResult a = answers[i];
@@ -1047,29 +1029,29 @@ namespace OtzariaDict
             MaximizeBox = false; MinimizeBox = false; ShowInTaskbar = false;
             if (Dpi.Forced) { StartPosition = FormStartPosition.Manual; Location = new Point(0, 0); }
             else StartPosition = FormStartPosition.CenterParent;
-            BackColor = Theme.Card;
+            BackColor = Theme.Window;
             Font = Theme.F(14, false);
             Icon = MainForm.AppIcon();
             AccessibleRole = AccessibleRole.Dialog;
             AccessibleName = "הסרה מתקדמת";
 
-            MarkTitle head = new MarkTitle { Bounds = Dpi.R(28, 22, 564, 32), Kind = MsgKind.Warn, Font = Theme.F(20, true), Text = "הסרה מתקדמת" };
-            TextBlock lead = new TextBlock { Bounds = Dpi.R(28, 60, 564, 24), Font = Theme.F(14, false), Color = Theme.TextSoft,
+            MarkTitle head = new MarkTitle { Bounds = Dpi.R(28, 24, 564, 32), Kind = MsgKind.Warn, Font = Theme.F(20, true), Text = "הסרה מתקדמת" };
+            TextBlock lead = new TextBlock { Bounds = Dpi.R(28, 62, 564, 24), Font = Theme.F(14, false), Color = Theme.TextSoft,
                 Text = "בחרו מה לעשות. לפני כל שינוי נשמר עותק גיבוי." };
-            rOurs = Row(96, "הסרת המילון התורני", "כמו \"הסר מוורד\": המילון יוצא מוורד. מילים שהוספתם בעצמכם נשמרות.", Options.RemoveOurs);
-            rPersonal = Row(176, "הסרת המילים שלו גם מהמילון האישי של וורד",
+            rOurs = Row(98, "הסרת המילון התורני", "כמו \"הסר מוורד\": המילון יוצא מוורד. מילים שהוספתם בעצמכם נשמרות.", Options.RemoveOurs);
+            rPersonal = Row(186, "הסרת המילים שלו גם מהמילון האישי של וורד",
                 "המילון של \"הוסף למילון\", וגם CUSTOM.DIC של גרסה 2.0. רק מילים של המילון התורני יוצאות; שאר המילים שלכם נשארות.", Options.CleanPersonal);
-            rList = Row(256, "תיקון רשימת המילונים של וורד",
+            rList = Row(274, "תיקון רשימת המילונים של וורד",
                 "מנקה מהרשימה של וורד רשומות ישנות של התוכנה ושל בדיקות, שחוסמות הוספת מילונים (למשל אחרי בדיקת הגודל).", Options.RepairList);
             // (on at first only when this program switched the marking off; the person may have switched it off in Word, so the text
             // does not claim that it is on)
-            rRepeat = Row(336, "החזרת סימון מילים כפולות", "וורד יחזור לסמן כשגיאה מילים שחוזרות פעמיים ברצף.", Options.RestoreRepeated && repeatOff);
-            rAll = Row(416, "מחיקת כל המילונים המותאמים אישית",
+            rRepeat = Row(362, "החזרת סימון מילים כפולות", "וורד יחזור לסמן כשגיאה מילים שחוזרות פעמיים ברצף.", Options.RestoreRepeated && repeatOff);
+            rAll = Row(450, "מחיקת כל המילונים המותאמים אישית",
                 "זהירות: כל המילונים, גם שלכם ושל תוכנות אחרות. יישאר רק המילון המובנה של וורד.", Options.RemoveAll);
 
-            LowerPanel strip = new LowerPanel { Bounds = Dpi.R(0, 512, 620, 76) };
-            go = new FlatBtn { Bounds = Dpi.R(452, 16, 140, 44), Text = "הסר", Style = BtnStyle.Filled, AccessibleName = "הסר" };
-            FlatBtn cancel = new FlatBtn { Bounds = Dpi.R(300, 16, 140, 44), Text = "ביטול", Style = BtnStyle.Outlined, AccessibleName = "ביטול" };
+            LowerPanel strip = new LowerPanel { Bounds = Dpi.R(0, 554, 620, 68) };
+            go = new FlatBtn { Bounds = Dpi.R(452, 0, 140, 44), Text = "הסר", Style = BtnStyle.Filled, AccessibleName = "הסר" };
+            FlatBtn cancel = new FlatBtn { Bounds = Dpi.R(300, 0, 140, 44), Text = "ביטול", Style = BtnStyle.Secondary, AccessibleName = "ביטול" };
             go.Click += delegate
             {
                 if (!Options.Any) return;
@@ -1081,14 +1063,14 @@ namespace OtzariaDict
             cancel.Click += delegate { Close(); };
             strip.Controls.AddRange(new Control[] { go, cancel });
             Controls.AddRange(new Control[] { head, lead, rOurs, rPersonal, rList, rRepeat, rAll, strip });
-            ClientSize = Dpi.Sz(620, 588);
+            ClientSize = Dpi.Sz(620, 622);
             ActiveControl = go;
             Sync();
         }
 
         OptionRow Row(int y, string title, string desc, bool on)
         {
-            OptionRow r = new OptionRow { Bounds = Dpi.R(28, y, 564, 72), Title = title, Desc = desc, CheckStyle = true, CountRoom = false, Highlight = false, Selected = on };
+            OptionRow r = new OptionRow { Bounds = Dpi.R(28, y, 564, 80), Title = title, Desc = desc, CheckStyle = true, CountRoom = false, Highlight = false, Selected = on };
             r.AccessibleName = title; r.AccessibleDescription = desc;
             r.Chosen += delegate { r.Selected = !r.Selected; Sync(); };
             return r;
@@ -1111,7 +1093,7 @@ namespace OtzariaDict
     // ------------------------------------------------------------------------------------------ main window
     class MainForm : Form
     {
-        Header header; StatusLabel chip; TextBlock secTitle, stage, footer; InfoBar status; CardPanel tools;
+        Header header; StatusLabel chip; TextBlock secTitle, stage, footer; InfoBar status;
         OptionRow cardBasic, cardExt, cardComp;
         FlatBtn btnInstall, btnRemove;
         IconBtn btnManual, btnWords, btnRepeat, btnAdvanced;
@@ -1152,28 +1134,29 @@ namespace OtzariaDict
             DoubleBuffered = true;
             Icon = AppIcon();
 
-            // 3.1: the light grey window with white cards. Top: the name (right) and the state of this computer as a pill (left).
-            header = new Header { Bounds = Dpi.R(0, 0, 720, 96) };
-            chip = new StatusLabel { Bounds = Dpi.R(32, 35, 300, 28) };
+            // 3.1 (the owner's choice, design B): the light grey window with white cards that have no border and no shadow, round buttons
+            // and four white tiles. Top: the name (right) and the state of this computer as a white pill (left). (Places: LayoutAll.)
+            header = new Header();
+            chip = new StatusLabel();
             header.Controls.Add(chip);
-            secTitle = new TextBlock { Bounds = Dpi.R(440, 104, 248, 24), Font = Theme.F(16, true), Color = Theme.Text, VCenter = true, Wrap = false, Text = "בחרו מילון" };
+            secTitle = new TextBlock { Font = Theme.F(15, true), Color = Theme.Text, VCenter = true, Wrap = false, Text = "בחרו מילון" };
 
-            // the choice: three cards, one under the other, 8 apart
+            // the choice: three cards, one under the other, 10 apart
             cardBasic = new OptionRow
             {
-                Bounds = Dpi.R(32, 136, 656, 84), Pos = RowPos.First, Title = "בסיסי", Selected = true,
+                Title = "בסיסי", Selected = true,
                 Desc = "מילים מהתנ״ך, מהמשנה, מהתלמוד הבבלי ומהתלמוד הירושלמי, וכל ראשי התיבות של 2-3 אותיות (כמו רש\"י, חז\"ל).",
                 Count = CountText(false, false)
             };
             cardExt = new OptionRow
             {
-                Bounds = Dpi.R(32, 228, 656, 84), Pos = RowPos.Middle, Title = "מורחב",
+                Title = "מורחב",
                 Desc = "כולל את הבסיסי, ובנוסף מילים משאר הספרים: ראשונים, אחרונים, הלכה, מדרש ועוד, וראשי התיבות שמופיעים בהם.",
                 Count = CountText(true, false)
             };
             cardComp = new OptionRow
             {
-                Bounds = Dpi.R(32, 320, 656, 84), Pos = RowPos.Last, Title = "חיבור תורני", CheckStyle = true,
+                Title = "חיבור תורני", CheckStyle = true,
                 Desc = "תוספת לבחירה: מילים בעברית עם אותיות חיבור כמו בארמית (דהעניין, ודלא, כדמצוה...), מילים שאינן במילון עצמו.",
                 Count = ""   // filled in by UpdateSummary: how many words it adds depends on the edition chosen above it
             };
@@ -1182,72 +1165,77 @@ namespace OtzariaDict
             cardExt.Chosen += delegate { if (!busy && !asking) { cardExt.Selected = true; cardBasic.Selected = false; UpdateSummary(); } };
             cardComp.Chosen += delegate { if (!busy && !asking) { cardComp.Selected = !cardComp.Selected; UpdateSummary(); } };
 
-            btnRemove = new FlatBtn { Bounds = Dpi.R(32, 424, 240, 48), Text = "הסר מוורד", Style = BtnStyle.Outlined };
-            btnInstall = new FlatBtn { Bounds = Dpi.R(288, 424, 400, 48), Text = "התקן", Style = BtnStyle.Filled };
+            btnRemove = new FlatBtn { Text = "הסר מוורד", Style = BtnStyle.Secondary };
+            btnInstall = new FlatBtn { Text = "התקן", Style = BtnStyle.Filled };
             btnInstall.Click += delegate { StartInstall(); };
             btnRemove.Click += delegate { StartRemove(); };
 
-            prog = new ProgressLine { Bounds = Dpi.R(32, 486, 656, 4) };
+            prog = new ProgressLine();
             // the line under the progress bar: while the program works it shows what it is doing (stage); when it is done, the result (status).
             // They take the same place, and only one of them is visible at a time (SetStage).
-            stage = new TextBlock { Bounds = Dpi.R(32, 498, 656, 22), Font = Theme.F(14, false), Color = Theme.TextSoft, Text = "", Visible = false };
-            status = new InfoBar { Bounds = Dpi.R(32, 494, 656, 54) };
+            stage = new TextBlock { Font = Theme.F(14, false), Color = Theme.TextSoft, Text = "", Visible = false };
+            status = new InfoBar();
             prog.Visible = false;   // the progress line is shown only while an action runs; its result is shown in the bar under it
 
-            // the tools: one quiet row in a white card - the person's own words (3.0.0.9), the manual route, repeated words, advanced removal
-            tools = new CardPanel { Bounds = Dpi.R(32, 556, 656, 60) };
-            btnWords = new IconBtn { Bounds = Dpi.R(494, 8, 154, 44), Text = "עריכת מילים", Icon = Glyph.Pencil };
-            btnManual = new IconBtn { Bounds = Dpi.R(332, 8, 154, 44), Text = "התקנה ידנית", Icon = Glyph.Folder };
-            btnRepeat = new IconBtn { Bounds = Dpi.R(170, 8, 154, 44), Text = "מילים כפולות", Icon = Glyph.Double };
-            btnAdvanced = new IconBtn { Bounds = Dpi.R(8, 8, 154, 44), Text = "הסרה מתקדמת", Icon = Glyph.Trash };
+            // the tools: four white tiles - the person's own words (3.0.0.9), the manual route, repeated words, advanced removal
+            btnWords = new IconBtn { Text = "עריכת מילים", Icon = Glyph.Pencil };
+            btnManual = new IconBtn { Text = "התקנה ידנית", Icon = Glyph.Folder };
+            btnRepeat = new IconBtn { Text = "מילים כפולות", Icon = Glyph.Double };
+            btnAdvanced = new IconBtn { Text = "הסרה מתקדמת", Icon = Glyph.Trash };
             btnWords.Click += delegate { StartWords(); };
             btnManual.Click += delegate { StartManual(); };
             btnRepeat.Click += delegate { StartRepeated(); };
             btnAdvanced.Click += delegate { StartAdvanced(); };
-            tools.Controls.AddRange(new Control[] { btnWords, btnManual, btnRepeat, btnAdvanced });
             tips = new ToolTip();
             tips.SetToolTip(btnWords, "הוספה, תיקון והסרה של מילים במילון, ושליחת הצעה לבעל המילון");
             tips.SetToolTip(btnManual, "אם ההתקנה האוטומטית לא עובדת: הקובץ נשמר, ומוסיפים אותו בוורד בעצמכם");
             tips.SetToolTip(btnAdvanced, "הסרה עם אפשרויות: גם מהמילון האישי של וורד, תיקון רשימת המילונים של וורד, החזרת סימון מילים כפולות ועוד");
 
             string wv = Core.WordVersion();
-            footer = new TextBlock { Bounds = Dpi.R(32, 630, 656, 18), Font = Theme.F(12.5f, false), Color = Theme.TextQuiet, Center = true, Wrap = false,
+            footer = new TextBlock { Font = Theme.F(12.5f, false), Color = Theme.TextQuiet, Center = true, Wrap = false,
                 Text = "גרסה " + Core.AppVersion + "   ·   וורד שזוהה במחשב: " + (wv ?? "לא זוהה") };
 
             // the order of the Tab key follows this order: right to left, so "install" comes before "remove"
-            Controls.AddRange(new Control[] { header, secTitle, cardBasic, cardExt, cardComp, btnInstall, btnRemove, prog, stage, status, tools, footer });
+            Controls.AddRange(new Control[] { header, secTitle, cardBasic, cardExt, cardComp, btnInstall, btnRemove, prog, stage, status,
+                                              btnWords, btnManual, btnRepeat, btnAdvanced, footer });
             cardBasic.AccessibleRole = AccessibleRole.RadioButton; cardExt.AccessibleRole = AccessibleRole.RadioButton;
             LayoutAll();
             RefreshState(true);
         }
 
-        // 3.1: the place of everything for the window's size. The design is 720 x WindowHeight; a bigger window keeps the content as one
-        // column in the middle (at most 880 wide, the cards and the buttons as wide as the column) and the whole block in the middle of
-        // the height.
+        // 3.1: the place of everything for the window's size. The design is 720 x WindowHeight (design units, from top to bottom: the
+        // name 22-70, "בחרו מילון" 88, the cards 120 / 220 / 320 (90 high), the buttons 426 (54), the result 494 (58), the tools 566 (74),
+        // the footer 654). A bigger window keeps the content as one column in the middle (at most 880 wide, the cards and the buttons as
+        // wide as the column) and the whole block in the middle of the height.
         void LayoutAll()
         {
             if (footer == null) return;   // (a resize while the window is being built)
             Size cs = ClientSize;
-            int colW = Math.Min(Math.Max(Dpi.S(656), cs.Width - Dpi.S(64)), Dpi.S(880));
+            int colW = Math.Min(Math.Max(Dpi.S(652), cs.Width - Dpi.S(68)), Dpi.S(880));
             int x = Math.Max(0, (cs.Width - colW) / 2);
             int dy = Math.Max(0, (cs.Height - Dpi.S(Dpi.WindowHeight)) / 2);
-            header.Bounds = new Rectangle(0, dy, cs.Width, Dpi.S(96));
+            header.Bounds = new Rectangle(0, dy, cs.Width, Dpi.S(80));
             header.ContentLeft = x; header.ContentRight = x + colW;
-            chip.Bounds = new Rectangle(x, Dpi.S(35), Dpi.S(300), Dpi.S(28));
-            secTitle.Bounds = new Rectangle(x + colW - Dpi.S(248), dy + Dpi.S(104), Dpi.S(248), Dpi.S(24));
-            cardBasic.Bounds = new Rectangle(x, dy + Dpi.S(136), colW, Dpi.S(84));
-            cardExt.Bounds = new Rectangle(x, dy + Dpi.S(228), colW, Dpi.S(84));
-            cardComp.Bounds = new Rectangle(x, dy + Dpi.S(320), colW, Dpi.S(84));
-            btnRemove.Bounds = new Rectangle(x, dy + Dpi.S(424), Dpi.S(240), Dpi.S(48));
-            btnInstall.Bounds = new Rectangle(x + Dpi.S(256), dy + Dpi.S(424), colW - Dpi.S(256), Dpi.S(48));
-            prog.Bounds = new Rectangle(x, dy + Dpi.S(486), colW, Dpi.S(4));
-            stage.Bounds = new Rectangle(x, dy + Dpi.S(498), colW, Dpi.S(22));
-            status.Bounds = new Rectangle(x, dy + Dpi.S(494), colW, Dpi.S(54));
-            tools.Bounds = new Rectangle(x, dy + Dpi.S(556), colW, Dpi.S(60));
-            int gap = Dpi.S(8), bw = (colW - 2 * gap - 3 * gap) / 4;
-            IconBtn[] row = { btnWords, btnManual, btnRepeat, btnAdvanced };   // right to left
-            for (int i = 0; i < row.Length; i++) row[i].Bounds = new Rectangle(colW - gap - (i + 1) * bw - i * gap, gap, bw, Dpi.S(44));
-            footer.Bounds = new Rectangle(x, dy + Dpi.S(630), colW, Dpi.S(18));
+            chip.Bounds = new Rectangle(x, Dpi.S(31), Dpi.S(300), Dpi.S(30));   // (inside the header)
+            secTitle.Bounds = new Rectangle(x + colW - Dpi.S(4) - Dpi.S(248), dy + Dpi.S(88), Dpi.S(248), Dpi.S(22));
+            cardBasic.Bounds = new Rectangle(x, dy + Dpi.S(120), colW, Dpi.S(90));
+            cardExt.Bounds = new Rectangle(x, dy + Dpi.S(220), colW, Dpi.S(90));
+            cardComp.Bounds = new Rectangle(x, dy + Dpi.S(320), colW, Dpi.S(90));
+            int sw = Dpi.S(214), gap = Dpi.S(12);
+            btnRemove.Bounds = new Rectangle(x, dy + Dpi.S(426), sw, Dpi.S(54));
+            btnInstall.Bounds = new Rectangle(x + sw + gap, dy + Dpi.S(426), colW - sw - gap, Dpi.S(54));
+            prog.Bounds = new Rectangle(x, dy + Dpi.S(500), colW, Dpi.S(6));
+            stage.Bounds = new Rectangle(x, dy + Dpi.S(514), colW, Dpi.S(22));
+            status.Bounds = new Rectangle(x, dy + Dpi.S(494), colW, Dpi.S(58));
+            // the four tiles, right to left, 10 apart; the last one takes the pixels that are left over
+            int tg = Dpi.S(10), tw = (colW - 3 * tg) / 4;
+            IconBtn[] row = { btnWords, btnManual, btnRepeat, btnAdvanced };
+            for (int i = 0; i < row.Length; i++)
+            {
+                int right = x + colW - i * (tw + tg);
+                row[i].Bounds = new Rectangle(i == row.Length - 1 ? x : right - tw, dy + Dpi.S(566), i == row.Length - 1 ? right - x : tw, Dpi.S(74));
+            }
+            footer.Bounds = new Rectangle(x, dy + Dpi.S(654), colW, Dpi.S(18));
             header.Invalidate();
         }
 
