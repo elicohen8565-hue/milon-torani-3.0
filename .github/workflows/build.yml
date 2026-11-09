@@ -31,10 +31,10 @@ jobs:
       - name: Keep the program with this run
         uses: actions/upload-artifact@v4
         with:
-          name: Milon-Torani-3.0
+          name: Milon-Torani-3.1
           path: |
-            dist/Milon-Torani-3.0.exe
-            dist/Milon-Torani-3.0.exe.sha256
+            dist/Milon-Torani-3.1.exe
+            dist/Milon-Torani-3.1.exe.sha256
 
       - name: Publish a release for a new version
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'

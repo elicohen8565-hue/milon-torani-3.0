@@ -1,4 +1,4 @@
-# Building and checking Torah Dictionary 3.0
+# Building and checking Torah Dictionary 3.1
 
 The program is a WinForms installer in C# 5 for .NET Framework 4.5. It is built on Linux with Mono, and it runs on Windows 10/11 with Microsoft Word.
 
@@ -9,14 +9,14 @@ sudo apt-get install -y mono-devel mono-mcs libmono-cecil-private-cil python3-pi
 bash scripts/build_all.sh
 ```
 
-The result is `dist/Milon-Torani-3.0.exe`. You only get it if every check passed. GitHub Actions (`.github/workflows/build.yml`) runs the same script on every push.
+The result is `dist/Milon-Torani-3.1.exe` (and the same file as `dist/Milon-Torani-3.0.exe`, the name that the 3.0 download links use). You only get it if every check passed. GitHub Actions (`.github/workflows/build.yml`) runs the same script on every push.
 
 ## What the script does, and the rules behind it
 
 1. **Assets** (`src/make_assets.py`) – it makes:
    - the icon `app.ico`: 9 sizes, written by hand, as 32-bit bitmaps plus a PNG for 256;
    - the exact word count of each edition (`counts.txt`);
-   - the compressed word lists that are embedded in the program.
+   - the compressed word lists that are embedded in the program, and the list of words that left the dictionary (`data/retired_list.txt`).
 2. **Build** (`src/build.sh`) – builds `TorahDictionary.exe` and the developer tool `DevDump.exe`.
    - **Rule:** the build compiles against the .NET Framework 4.5 **reference** assemblies (`/usr/lib/mono/4.5-api`), never against Mono's own libraries.
    - Mono's libraries have methods that .NET Framework lacks, such as `String.Split(char, StringSplitOptions)`. A program that uses one runs under Mono but dies on Windows with `MissingMethodException`.
@@ -27,7 +27,8 @@ The result is `dist/Milon-Torani-3.0.exe`. You only get it if every check passed
    - It runs only under Mono. On Windows it refuses, because it writes this user's registry.
 4. **Dictionary:** `DevDump.exe` writes the four editions exactly as the installer writes them, and their SHA-256 must equal `tests/dictionary.sha256`.
    - When the word lists in `data/` change on purpose, update that file in the same commit.
-   - Also add every word that was dropped from the lists to `Core.Retired` (`src/Core.cs`). Otherwise a dropped word left in an installed file is kept as if the user had added it.
+   - Also add every word that was dropped from the lists to `data/retired_list.txt` (the program reads it as `Core.Retired`). Otherwise a dropped word left in an installed file is kept as if the user had added it. `tools/stage1/build_lists_v2.py` writes it.
+5. **Sources** (3.1): `data/sources.txt.gz` - where each word appears, shown in the word-editing window - is embedded as `Otzaria.sources.gz`. It is made by `tools/sources/` (see its README) from the scanned libraries. The self-test checks that every word of the two lists has its sources.
 
 ## Suggestions from the program (GitHub issues)
 
@@ -50,7 +51,7 @@ After the person saves changes in "word editing", the program offers to send the
 
 When the checks pass, `scripts/release.sh` publishes the release `v<version>` with the program. A push that keeps the same version number builds and tests the program, but publishes nothing.
 
-The download name is ASCII on purpose (`Milon-Torani-3.0.exe`), because GitHub may rename release files whose names have other characters. Inside Windows, the program, its window and its file details are named "המילון התורני 3.0".
+The download name is ASCII on purpose (`Milon-Torani-3.1.exe`; a release also carries the same file as `Milon-Torani-3.0.exe`, so that old links keep working), because GitHub may rename release files whose names have other characters. Inside Windows, the program, its window and its file details are named "המילון התורני 3.1".
 
 ## Files
 
@@ -63,6 +64,9 @@ The download name is ASCII on purpose (`Milon-Torani-3.0.exe`), because GitHub m
 | `data/basic_list.txt` | Basic edition (Tanakh, Mishnah, Bavli, Yerushalmi) |
 | `data/extended_only_list.txt` | What the extended edition adds |
 | `data/hebrew_base.txt` | Base words for "chibur torani" (6 Aramaic connecting letters × these words) |
+| `data/retired_list.txt` | Words of earlier versions that left the dictionary (`Core.Retired`) |
+| `data/sources.txt.gz` | Where each word appears (books, places), for the word-editing window |
+| `tools/stage1/`, `tools/sources/` | How the word lists and the sources were made |
 
 ## Hidden switches (developer only)
 
@@ -70,6 +74,9 @@ The download name is ASCII on purpose (`Milon-Torani-3.0.exe`), because GitHub m
 - `--preview`: shows the "installed" look.
 - `--preview-wordopen [remove]`: shows the "Word is open" window.
 - `--preview-words`, `--preview-suggest`: show the word-editing window and the suggestion window with sample changes. Nothing is saved.
+- `--preview-words <text>`: the word-editing window with the words found by that search and their sources.
+- `--preview-advanced`: the choices of the advanced removal.
+- `--size WxH`: the main window at that size.
 
 To see the window on Linux:
 

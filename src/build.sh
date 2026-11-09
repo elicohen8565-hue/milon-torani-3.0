@@ -16,14 +16,17 @@ API=/usr/lib/mono/4.5-api
 if [ ! -d "$API" ]; then echo "missing $API  (apt-get install -y mono-devel)"; exit 1; fi
 
 REFS="-nostdlib -noconfig -lib:$API -r:mscorlib.dll -r:System.dll -r:System.Core.dll -r:System.Drawing.dll -r:System.Windows.Forms.dll"
-RES="-resource:basic.txt.gz,Otzaria.basic.txt.gz -resource:more.txt.gz,Otzaria.more.txt.gz -resource:hebrew_base.txt.gz,Otzaria.hebrew_base.txt.gz -resource:counts.txt,Otzaria.counts.txt"
+RES="-resource:basic.txt.gz,Otzaria.basic.txt.gz -resource:more.txt.gz,Otzaria.more.txt.gz -resource:hebrew_base.txt.gz,Otzaria.hebrew_base.txt.gz -resource:counts.txt,Otzaria.counts.txt -resource:retired.txt.gz,Otzaria.retired.txt.gz"
 OPT="-codepage:utf8 -langversion:5 -optimize+"
 # the key that lets the program open issues in its GitHub repository (stage 4): issue.bin is written by scripts/build_all.sh from the
 # secret ISSUE_TOKEN, already hidden (Suggest.Encode). Without it the program is built without the key and suggestions go through the browser.
 KEY=""
 if [ -f issue.bin ]; then KEY="-resource:issue.bin,Milon.issue.bin"; fi
+# 3.1: where each word appears (the word-editing window shows it next to each word), when the build has it
+SRC=""
+if [ -f sources.gz ]; then SRC="-resource:sources.gz,Otzaria.sources.gz"; fi
 
-mcs $REFS $OPT -target:winexe -out:"$OUT/TorahDictionary.exe" -win32icon:app.ico $RES -resource:app.ico,Otzaria.app.ico $KEY Core.cs UI.cs Words.cs
+mcs $REFS $OPT -target:winexe -out:"$OUT/TorahDictionary.exe" -win32icon:app.ico $RES -resource:app.ico,Otzaria.app.ico $KEY $SRC Core.cs UI.cs Words.cs
 mcs $REFS $OPT -target:exe -main:OtzariaDict.DevDump -out:"$OUT/DevDump.exe" $RES Core.cs DevDump.cs
 
 # second guard, on the finished program: look inside it (Mono.Cecil) and check every .NET library member it uses against the reference assemblies

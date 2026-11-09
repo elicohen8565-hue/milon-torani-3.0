@@ -2,11 +2,20 @@
 # Builds the program from this repository and runs every check. GitHub Actions runs exactly this; by hand (Ubuntu 24.04):
 #   sudo apt-get install -y mono-devel mono-mcs libmono-cecil-private-cil python3-pil fonts-dejavu-core
 #   bash scripts/build_all.sh
-# Result: dist/Milon-Torani-3.0.exe - only when every check below has passed (any failure stops the script).
+# Result: dist/Milon-Torani-3.1.exe (and the same file as Milon-Torani-3.0.exe, the name of the old download links) -
+# only when every check below has passed (any failure stops the script).
 set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 B="$ROOT/build"
-EXE_NAME="Milon-Torani-3.0.exe"
+EXE_NAME="Milon-Torani-3.1.exe"
+OLD_NAME="Milon-Torani-3.0.exe"   # links to the 3.0 download (README of 3.0, posts) keep getting the newest version
+
+# one version everywhere: the program's number (Core.cs), the file's details (UI.cs) and the download name
+APPV=$(grep -oP 'AppVersion = "\K[0-9.]+' "$ROOT/src/Core.cs")
+ASMV=$(grep -oP 'AssemblyVersion\("\K[0-9.]+' "$ROOT/src/UI.cs")
+[ "$APPV" = "$ASMV" ] || { echo "version mismatch: AppVersion $APPV in Core.cs, AssemblyVersion $ASMV in UI.cs"; exit 1; }
+[ "$EXE_NAME" = "Milon-Torani-${APPV%.*.*}.exe" ] || { echo "the download name $EXE_NAME does not match version $APPV"; exit 1; }
+
 rm -rf "$B" "$ROOT/dist"
 mkdir -p "$B" "$ROOT/dist"
 
@@ -14,6 +23,10 @@ cp "$ROOT"/src/Core.cs "$ROOT"/src/UI.cs "$ROOT"/src/Words.cs "$ROOT"/src/DevDum
 cp "$ROOT/data/basic_list.txt" "$B/basic.txt"
 cp "$ROOT/data/extended_only_list.txt" "$B/more.txt"
 cp "$ROOT/data/hebrew_base.txt" "$B/hebrew_base.txt"
+# the words that earlier versions had and this one dropped (Core.Retired: an update must not keep them as the person's words)
+cp "$ROOT/data/retired_list.txt" "$B/retired.txt"
+# 3.1: where each word appears (made by tools/sources from all the scanned libraries; the self-test checks every word has its place)
+cp "$ROOT/data/sources.txt.gz" "$B/sources.gz"
 cd "$B"
 
 echo "== 1. assets: icon, exact word count of each edition, compressed word lists"
@@ -49,6 +62,7 @@ mono out/DevDump.exe dump
 
 rm -f issue.bin
 cp out/TorahDictionary.exe "$ROOT/dist/$EXE_NAME"
-(cd "$ROOT/dist" && sha256sum "$EXE_NAME" > "$EXE_NAME.sha256")
+cp out/TorahDictionary.exe "$ROOT/dist/$OLD_NAME"
+(cd "$ROOT/dist" && sha256sum "$EXE_NAME" > "$EXE_NAME.sha256" && sha256sum "$OLD_NAME" > "$OLD_NAME.sha256")
 echo "OK -> dist/$EXE_NAME"
 cat "$ROOT/dist/$EXE_NAME.sha256"

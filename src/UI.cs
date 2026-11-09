@@ -10,12 +10,12 @@ using System.Runtime.InteropServices;
 using System.Threading;
 using System.Windows.Forms;
 
-[assembly: AssemblyTitle("המילון התורני 3.0")]
-[assembly: AssemblyProduct("המילון התורני 3.0")]
+[assembly: AssemblyTitle("המילון התורני 3.1")]
+[assembly: AssemblyProduct("המילון התורני 3.1")]
 [assembly: AssemblyDescription("מתקין מילון תורני (תנ״ך, משנה, בבלי, ירושלמי ועוד) ל-Microsoft Word")]
-[assembly: AssemblyVersion("3.0.0.9")]
-[assembly: AssemblyFileVersion("3.0.0.9")]
-[assembly: AssemblyInformationalVersion("3.0.0.9")]
+[assembly: AssemblyVersion("3.1.0.0")]
+[assembly: AssemblyFileVersion("3.1.0.0")]
+[assembly: AssemblyInformationalVersion("3.1.0.0")]
 
 namespace OtzariaDict
 {
@@ -25,7 +25,7 @@ namespace OtzariaDict
     // that it handles a magnified screen by itself. Without that, Windows draws the finished window small and stretches the picture: that made it blurry at 125 % / 150 %.
     static class Dpi
     {
-        public const int WindowHeight = 674;       // the main window, in design units (its width is 720)
+        public const int WindowHeight = 686;       // the main window, in design units (its width is 720); with the frame it fits a 1366 x 768 screen
         public static float Scale = 1f;
         public static bool Forced;                 // --dpi N : for the developer's screenshots on a machine without Windows
 
@@ -60,40 +60,95 @@ namespace OtzariaDict
         public static Size Sz(int w, int h) { return new Size(S(w), S(h)); }
     }
 
-    // Look of Word / Office: the blue of Word, dark text, strong thin lines, straight corners. Flat: no shadows, no pills, no rounded cards.
+    // Look (3.1, the owner's choice of 9-11, "soft and round"): every window light grey, with white cards, lists and fields on it that have
+    // no border; big rounded corners, round ("pill") buttons, a soft blue accent, semibold titles. Flat colours only: no shadows, no
+    // gradients, no sheen (the owner: "בלי צל והצללות").
     static class Theme
     {
         static Color C(string hex) { return ColorTranslator.FromHtml(hex); }
-        public static readonly Color Primary = C("#185ABD");        // the blue of Word
-        public static readonly Color PrimaryHover = C("#154EA3");
-        public static readonly Color PrimaryDark = C("#103F91");    // pressed button, word count of the chosen row
+        public static readonly Color Primary = C("#2F6EEC");        // the accent (white text on it: 4.6:1)
+        public static readonly Color PrimaryHover = C("#2862D9");
+        public static readonly Color PrimaryDark = C("#2154C2");    // a pressed blue button
         public static readonly Color OnPrimary = C("#FFFFFF");
-        public static readonly Color OnPrimarySoft = C("#DCE8F8");  // small text on the blue (second line of the install button)
-        public static readonly Color Soft = C("#E8F1FC");           // light blue: the chosen row, hover of the blue-outline button
-        public static readonly Color SoftHover = C("#D6E6FA");
-        public static readonly Color Surface = C("#FFFFFF");        // window
-        public static readonly Color Panel = C("#F3F2F1");          // the grey lower panel (and the button strip of the dialog)
-        public static readonly Color Card = C("#FFFFFF");           // list rows, buttons
-        public static readonly Color RowHover = C("#F3F2F1");
-        public static readonly Color Line = C("#E1DFDD");           // light dividing lines
-        public static readonly Color Stroke = C("#8A8886");         // borders of the list and of the buttons
-        public static readonly Color Mark = C("#605E5C");           // empty round / square mark
-        public static readonly Color Track = C("#E1DFDD");          // empty progress line
-        public static readonly Color BtnHover = C("#F3F2F1");
-        public static readonly Color BtnPress = C("#EDEBE9");
-        public static readonly Color DisabledBack = C("#F3F2F1");
-        public static readonly Color DisabledText = C("#A19F9D");
-        public static readonly Color DisabledLine = C("#C8C6C4");
-        public static readonly Color Text = C("#1F1F1F");
-        public static readonly Color TextSoft = C("#424242");       // descriptions
-        public static readonly Color TextQuiet = C("#605E5C");      // footer, version, subtitle on white
-        public static readonly Color Warn = C("#C19C00");           // mark of "can be updated"
-        public static readonly Color OnWarn = C("#5C4400");
-        public static readonly Color Error = C("#C50F1F");
+        public static readonly Color OnPrimarySoft = C("#E2EBFE");  // small text on the blue (second line of the install button)
+        public static readonly Color Soft = C("#EEF4FF");           // light blue: the chosen card, the chosen row of a list
+        public static readonly Color SoftHover = C("#E2EBFD");      // a quiet blue button under the mouse
+        public static readonly Color SoftPill = C("#DCE7FF");       // the word count of the chosen card; the circle of a blue mark
+        public static readonly Color OnSoftPill = C("#2554C7");
+        public static readonly Color IconBack = C("#EEF3FF");       // the circle behind the icon of a tool
+        public static readonly Color Window = C("#F2F3F5");         // the background of every window
+        public static readonly Color Card = C("#FFFFFF");           // cards, tiles, lists, text fields
+        public static readonly Color CardHover = C("#F8FAFF");      // a card or a tile under the mouse ...
+        public static readonly Color RingHover = C("#D3DFFB");      // ... with a light blue ring
+        public static readonly Color RowHover = C("#F3F5F9");       // a row of a list under the mouse
+        public static readonly Color Secondary = C("#E4E7EC");      // the grey button
+        public static readonly Color SecondaryHover = C("#DADEE4");
+        public static readonly Color SecondaryPress = C("#CFD4DB");
+        public static readonly Color Line = C("#CDD3DB");           // the thin edge of the floating window of the sources
+        public static readonly Color Mark = C("#B4BAC3");           // the ring of an empty round mark
+        public static readonly Color MarkHover = C("#949CA8");
+        public static readonly Color SwitchOff = C("#C9CED6");
+        public static readonly Color SwitchOffHover = C("#BAC0CA");
+        public static readonly Color Track = C("#E4E7EC");          // the empty part of the progress line
+        public static readonly Color Pill = C("#F2F3F5");           // a quiet label (the word count of a card)
+        public static readonly Color OnPill = C("#4A5160");
+        public static readonly Color Thumb = C("#C9CED6");          // the scroll bar of a list
+        public static readonly Color ThumbHover = C("#A7AEB9");
+        public static readonly Color DisabledBack = C("#E9EBEE");
+        public static readonly Color DisabledText = C("#A0A6AF");
+        public static readonly Color Text = C("#1D2433");
+        public static readonly Color TextSoft = C("#5A6272");       // descriptions (6:1 on white)
+        public static readonly Color TextQuiet = C("#656C7A");      // footer, version, small notes (4.7:1 on the window grey)
+        public static readonly Color Ok = C("#1C7A47");             // "installed", done
+        public static readonly Color OkSoft = C("#E5F4EA");
+        public static readonly Color OkMark = C("#D5EEDD");         // the circle of a green mark
+        public static readonly Color OnOk = C("#155E37");
+        public static readonly Color OnOkSoft = C("#2E5A43");
+        public static readonly Color Warn = C("#B07A00");           // "can be updated", attention
+        public static readonly Color WarnMark = C("#FBEBC4");
+        public static readonly Color OnWarn = C("#7A5300");
+        public static readonly Color Error = C("#C42B1C");
+        public static readonly Color ErrorSoft = C("#FDECEA");
+        public static readonly Color ErrorMark = C("#F9DAD6");
+        public static readonly Color OnError = C("#8A1C12");
+        public static readonly Color OnErrorSoft = C("#7A352D");
 
-        // fonts are created once and reused (they used to be created again on every repaint and never released).
-        // size = height in design units (pixels at 100 %); the font itself is made in whole real pixels, so it is the same at every scale.
+        // fonts are created once and reused. size = height in design units (pixels at 100 %); the font is made in whole real pixels.
+        // "bold" is Segoe UI Semibold where Windows has it (the weight of Windows 11 titles): lighter and more modern than Bold.
         static readonly Dictionary<string, Font> fonts = new Dictionary<string, Font>();
+        static string semibold;
+        static bool semiChecked;
+        static string Semibold()
+        {
+            if (semiChecked) return semibold;
+            semiChecked = true;
+            try
+            {
+                using (System.Drawing.Text.InstalledFontCollection all = new System.Drawing.Text.InstalledFontCollection())
+                    foreach (FontFamily f in all.Families)
+                        if (string.Equals(f.Name, "Segoe UI Semibold", StringComparison.OrdinalIgnoreCase)) { semibold = f.Name; break; }
+            }
+            catch (Exception) { }
+            return semibold;
+        }
+        // the same font, underlined (a blue title under the mouse, like a link)
+        public static Font F(float size, bool bold, bool underline)
+        {
+            if (!underline) return F(size, bold);
+            string key = size.ToString(CultureInfo.InvariantCulture) + (bold ? "b" : "r") + "u@" + Dpi.Scale.ToString(CultureInfo.InvariantCulture);
+            Font f;
+            lock (fonts)
+            {
+                if (!fonts.TryGetValue(key, out f))
+                {
+                    Font baseFont = F(size, bold);
+                    f = new Font(baseFont, baseFont.Style | FontStyle.Underline);
+                    fonts[key] = f;
+                }
+            }
+            return f;
+        }
+
         public static Font F(float size, bool bold)
         {
             string key = size.ToString(CultureInfo.InvariantCulture) + (bold ? "b" : "r") + "@" + Dpi.Scale.ToString(CultureInfo.InvariantCulture);
@@ -103,7 +158,9 @@ namespace OtzariaDict
                 if (!fonts.TryGetValue(key, out f))
                 {
                     float px = (float)Math.Floor(size * Dpi.Scale + 0.5);
-                    f = new Font("Segoe UI", px, bold ? FontStyle.Bold : FontStyle.Regular, GraphicsUnit.Pixel);
+                    string semi = bold ? Semibold() : null;
+                    f = semi != null ? new Font(semi, px, FontStyle.Regular, GraphicsUnit.Pixel)
+                                     : new Font("Segoe UI", px, bold ? FontStyle.Bold : FontStyle.Regular, GraphicsUnit.Pixel);
                     fonts[key] = f;
                 }
             }
@@ -141,14 +198,28 @@ namespace OtzariaDict
         public static void Fill(Graphics g, Rectangle r, int rad, Color c)
         { using (GraphicsPath p = Round(Exact(r), rad)) using (SolidBrush b = new SolidBrush(c)) g.FillPath(b, p); }
 
-        // A rounded rectangle with a border of w whole pixels: first the whole shape in the border colour, then the inside (smaller by w on every
-        // side) on top of it. Two fills, not a pen: a filled edge on a whole-pixel position is sharp, while a pen line that is centred on the
-        // edge between two pixels is smeared over both of them (that - and the soft shadows - is what made the old borders look grainy).
-        public static void Box(Graphics g, Rectangle r, int rad, Color back, Color border, int w)
+        // a colour between a (t = 0) and b (t = 1)
+        public static Color Mix(Color a, Color b, float t)
         {
-            Fill(g, r, rad, border);
+            t = Math.Max(0f, Math.Min(1f, t));
+            return Color.FromArgb((int)(a.A + (b.A - a.A) * t), (int)(a.R + (b.R - a.R) * t), (int)(a.G + (b.G - a.G) * t), (int)(a.B + (b.B - a.B) * t));
+        }
+
+        // A ring of w whole pixels along the inside edge of a rounded rectangle (the blue ring of the chosen card, the focus mark): one fill
+        // of the shape with its inside cut out, not a pen - a filled edge on whole pixels is sharp, a pen line centred between two pixels
+        // is smeared over both of them.
+        public static void Ring(Graphics g, Rectangle r, int rad, Color c, int w)
+        {
             Rectangle inner = Rectangle.Inflate(r, -w, -w);
-            if (inner.Width > 0 && inner.Height > 0) Fill(g, inner, Math.Max(0, rad - w), back);
+            if (inner.Width <= 0 || inner.Height <= 0) { Fill(g, r, rad, c); return; }
+            using (GraphicsPath p = Round(Exact(r), rad))
+            using (GraphicsPath hole = Round(Exact(inner), Math.Max(0, rad - w)))
+            using (SolidBrush b = new SolidBrush(c))
+            {
+                p.AddPath(hole, false);
+                p.FillMode = FillMode.Alternate;
+                g.FillPath(b, p);
+            }
         }
         public static void Dot(Graphics g, Rectangle r, Color c)
         { using (SolidBrush b = new SolidBrush(c)) g.FillEllipse(b, Exact(r)); }
@@ -161,9 +232,6 @@ namespace OtzariaDict
         // a plain filled rectangle (always whole pixels, so its edges are sharp)
         public static void Rect(Graphics g, Rectangle r, Color c)
         { using (SolidBrush b = new SolidBrush(c)) g.FillRectangle(b, r); }
-        // a thin straight line (a filled strip, always whole pixels)
-        public static void HLine(Graphics g, int x, int y, int w, Color c)
-        { Rect(g, new Rectangle(x, y, w, Dpi.Hair), c); }
         // an outline of w whole pixels (four strips)
         public static void Frame(Graphics g, Rectangle r, Color c, int w)
         {
@@ -171,6 +239,31 @@ namespace OtzariaDict
             Rect(g, new Rectangle(r.X, r.Bottom - w, r.Width, w), c);
             Rect(g, new Rectangle(r.X, r.Y + w, w, r.Height - 2 * w), c);
             Rect(g, new Rectangle(r.Right - w, r.Y + w, w, r.Height - 2 * w), c);
+        }
+
+        // a pen for the line icons: round ends and corners
+        public static Pen IconPen(Color c, float width)
+        {
+            Pen p = new Pen(c, width);
+            p.StartCap = LineCap.Round; p.EndCap = LineCap.Round; p.LineJoin = LineJoin.Round;
+            return p;
+        }
+
+        // a tick, drawn in a square r (in units of 24, the size of the line icons)
+        public static void Tick(Graphics g, Rectangle r, Color c, float width)
+        {
+            float k = r.Width / 24f;
+            using (Pen p = IconPen(c, width))
+                g.DrawLines(p, new PointF[] { new PointF(r.X + 7.5f * k, r.Y + 12.5f * k), new PointF(r.X + 10.5f * k, r.Y + 15.5f * k), new PointF(r.X + 16.5f * k, r.Y + 9f * k) });
+        }
+
+        // "!", drawn (a line and a dot), in a square r
+        public static void Bang(Graphics g, Rectangle r, Color c, float width)
+        {
+            float k = r.Width / 24f;
+            using (Pen p = IconPen(c, width)) g.DrawLine(p, r.X + 12f * k, r.Y + 7f * k, r.X + 12f * k, r.Y + 13.2f * k);
+            float d = width * 1.25f;
+            using (SolidBrush b = new SolidBrush(c)) g.FillEllipse(b, r.X + 12f * k - d / 2f, r.Y + 16.8f * k - d / 2f, d, d);
         }
 
         // Hebrew text: right-to-left reading order, aligned to the right unless centred
@@ -181,10 +274,44 @@ namespace OtzariaDict
         public static void TextAt(Graphics g, string s, Font f, Color c, Rectangle r, Align a, bool vcenter, bool wrap)
         {
             TextFormatFlags fl = TextFormatFlags.RightToLeft | TextFormatFlags.NoPrefix;
-            fl |= wrap ? (TextFormatFlags.WordBreak | TextFormatFlags.TextBoxControl) : TextFormatFlags.SingleLine;
+            // one line that is too long ends with "…" (instead of being cut off - with Windows' own fonts a text may be a little wider)
+            fl |= wrap ? (TextFormatFlags.WordBreak | TextFormatFlags.TextBoxControl) : (TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis);
             fl |= a == Align.Center ? TextFormatFlags.HorizontalCenter : a == Align.Right ? TextFormatFlags.Right : TextFormatFlags.Left;
             if (vcenter) fl |= TextFormatFlags.VerticalCenter;
             TextRenderer.DrawText(g, s, f, r, c, fl);
+        }
+
+        // one line on the right, cut with "…" at its end when it does not fit
+        public static void Line(Graphics g, string s, Font f, Color c, Rectangle r)
+        {
+            TextRenderer.DrawText(g, s, f, r, c, TextFormatFlags.RightToLeft | TextFormatFlags.NoPrefix | TextFormatFlags.SingleLine
+                                                 | TextFormatFlags.Right | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+        }
+
+        // the colour of a mark of this kind, and the light circle behind it
+        public static Color MarkColor(MsgKind k)
+        { return k == MsgKind.Ok ? Theme.Ok : k == MsgKind.Warn ? Theme.Warn : k == MsgKind.Error ? Theme.Error : Theme.Primary; }
+        static Color MarkBack(MsgKind k)
+        { return k == MsgKind.Ok ? Theme.OkMark : k == MsgKind.Warn ? Theme.WarnMark : k == MsgKind.Error ? Theme.ErrorMark : Theme.SoftPill; }
+
+        // the mark at the start of the title of a message: a light round circle with a tick (done), "!" (attention, or it did not work),
+        // "?" (a question) or "i" (good to know) in its colour
+        public static void SoftMark(Graphics g, Rectangle m, MsgKind k)
+        {
+            Dot(g, m, MarkBack(k));
+            Color c = MarkColor(k);
+            float w = Math.Max(2f, 2.4f * m.Width / 30f);
+            if (k == MsgKind.Ok) Tick(g, m, c, w);
+            else if (k == MsgKind.Warn || k == MsgKind.Error) Bang(g, m, c, w);
+            else Text(g, k == MsgKind.Question ? "?" : "i", Theme.F(m.Width * 0.55f / Dpi.Scale, true), c, m, true, true);
+        }
+
+        // the mark of the result bar: a thin ring with a tick (it worked) or "!" (it did not)
+        public static void LineMark(Graphics g, Rectangle m, bool ok, Color c)
+        {
+            float k = m.Width / 24f, w = Math.Max(1.6f, 1.8f * k);
+            using (Pen p = IconPen(c, w)) g.DrawEllipse(p, m.X + 2.5f * k, m.Y + 2.5f * k, 19f * k, 19f * k);
+            if (ok) Tick(g, m, c, w); else Bang(g, m, c, w);
         }
     }
 
@@ -197,35 +324,33 @@ namespace OtzariaDict
         }
     }
 
+    // the top of the main window, on the grey of the window: the logo (the blue square with alef), the name and one line under it.
+    // The state of the computer ("installed: ...") is a pill on the other side of it (a child control, placed by MainForm).
     class Header : BaseControl
     {
+        public Header() { BackColor = Theme.Window; }
+        // the column of the window's content, in pixels (3.1: the window can be wider than its design; the header follows the column)
+        public int ContentLeft = -1, ContentRight = -1;
         protected override void OnPaint(PaintEventArgs e)
         {
             Graphics g = e.Graphics;
-            g.SmoothingMode = SmoothingMode.AntiAlias; g.PixelOffsetMode = PixelOffsetMode.Half;   // Half: whole numbers are pixel EDGES, so shapes and lines land exactly on pixels
-            // a white header with a thin line under it (the user chose this one of two proposals); the blue square with the letter is the logo
-            g.Clear(Theme.Card);
-            Gfx.HLine(g, 0, Height - Dpi.Hair, Width, Theme.Line);
-            Rectangle logo = new Rectangle(Width - Dpi.S(24) - Dpi.S(44), Dpi.S(18), Dpi.S(44), Dpi.S(44));
-            Gfx.Fill(g, logo, Dpi.S(4), Theme.Primary);
-            Gfx.Text(g, "א", Theme.F(28, true), Theme.OnPrimary, logo, true, true);
-            int right = logo.X - Dpi.S(14), left = Dpi.S(150);
-            Gfx.TextAt(g, "המילון התורני 3.0", Theme.F(22, true), Theme.Text, new Rectangle(left, Dpi.S(15), right - left, Dpi.S(30)), Align.Right, true, false);
-            Gfx.TextAt(g, "כדי שוורד יפסיק לסמן מילים תורניות כשגיאות", Theme.F(14, false), Theme.TextQuiet, new Rectangle(left, Dpi.S(46), right - left, Dpi.S(20)), Align.Right, true, false);
-            // software version, on the left side of the header
-            Gfx.TextAt(g, "גרסה " + Core.AppVersion, Theme.F(13, false), Theme.TextQuiet, new Rectangle(Dpi.S(24), Dpi.S(30), Dpi.S(120), Dpi.S(20)), Align.Left, true, false);
+            g.SmoothingMode = SmoothingMode.AntiAlias; g.PixelOffsetMode = PixelOffsetMode.Half;
+            g.Clear(BackColor);
+            int cl = ContentLeft >= 0 ? ContentLeft : Dpi.S(34), cr = ContentRight >= 0 ? ContentRight : Width - Dpi.S(34);
+            Rectangle logo = new Rectangle(cr - Dpi.S(48), Dpi.S(22), Dpi.S(48), Dpi.S(48));
+            Gfx.Fill(g, logo, Dpi.S(15), Theme.Primary);
+            Gfx.Text(g, "א", Theme.F(27, true), Theme.OnPrimary, logo, true, true);
+            int right = logo.X - Dpi.S(14), left = cl + Dpi.S(308);
+            Gfx.TextAt(g, MainForm.Title, Theme.F(24, true), Theme.Text, new Rectangle(left, Dpi.S(20), right - left, Dpi.S(32)), Align.Right, true, false);
+            Gfx.TextAt(g, "כדי שוורד יפסיק לסמן מילים תורניות כשגיאות", Theme.F(14, false), Theme.TextSoft, new Rectangle(left, Dpi.S(52), right - left, Dpi.S(20)), Align.Right, true, false);
         }
     }
 
-    // the grey strip at the bottom of the window (and of the dialog): a thin line on top, the other buttons on it
+    // the place of the buttons at the bottom of a dialog: no strip and no line of its own (3.1), the buttons simply stand on the window
     class LowerPanel : BaseControl
     {
-        public LowerPanel() { BackColor = Theme.Panel; }
-        protected override void OnPaint(PaintEventArgs e)
-        {
-            e.Graphics.Clear(BackColor);
-            Gfx.HLine(e.Graphics, 0, 0, Width, Theme.Line);
-        }
+        public LowerPanel() { BackColor = Theme.Window; }
+        protected override void OnPaint(PaintEventArgs e) { e.Graphics.Clear(Parent != null ? Parent.BackColor : BackColor); }
     }
 
     class TextBlock : BaseControl
@@ -237,14 +362,15 @@ namespace OtzariaDict
         public override string Text { get { return text; } set { text = value ?? ""; Invalidate(); } }
         protected override void OnPaint(PaintEventArgs e)
         {
-            e.Graphics.Clear(Parent != null ? Parent.BackColor : Theme.Surface);
+            e.Graphics.Clear(Parent != null ? Parent.BackColor : Theme.Window);
             Gfx.TextAt(e.Graphics, text, Font, Color, new Rectangle(0, 0, Width, Height), Center ? Align.Center : Align.Right, VCenter, Wrap);
         }
     }
 
     enum LabelKind { None, Ok, Warn }
 
-    // "installed: ..." line: a small round mark and the text next to it, no background
+    // "installed: ..." - a white pill with a coloured dot and the text in the same colour (green = up to date, amber = can be updated,
+    // grey = not installed). It hugs the left edge of its control.
     class StatusLabel : BaseControl
     {
         public LabelKind Kind = LabelKind.None;
@@ -253,38 +379,60 @@ namespace OtzariaDict
         protected override void OnPaint(PaintEventArgs e)
         {
             Graphics g = e.Graphics;
-            g.Clear(Parent != null ? Parent.BackColor : Theme.Surface);
+            g.Clear(Parent != null ? Parent.BackColor : Theme.Window);
             g.SmoothingMode = SmoothingMode.AntiAlias; g.PixelOffsetMode = PixelOffsetMode.Half;
-            Font f = Theme.F(13, true);
-            Color fore = Kind == LabelKind.Ok ? Theme.Primary : Kind == LabelKind.Warn ? Theme.OnWarn : Theme.TextQuiet;
-            int mark = Dpi.S(14), gap = Dpi.S(6), pad = Dpi.S(8);
+            Font f = Theme.F(12.5f, true);
+            Color back = Theme.Card;
+            Color fore = Kind == LabelKind.Ok ? Theme.Ok : Kind == LabelKind.Warn ? Theme.OnWarn : Theme.TextSoft;
+            Color dotColor = Kind == LabelKind.Ok ? Theme.Ok : Kind == LabelKind.Warn ? Theme.Warn : Theme.Mark;
+            int dot = Dpi.S(7), gap = Dpi.S(7), padL = Dpi.S(13), padR = Dpi.S(13);
             int tw;
             try { tw = TextRenderer.MeasureText(g, text, f, new Size(Width, Height), TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix | TextFormatFlags.SingleLine).Width; }
-            catch (Exception) { tw = Width - mark - gap - pad; }
-            tw = Math.Max(0, Math.Min(tw, Width - mark - gap - pad));
-            // the text hugs the left edge of the control; in a right-to-left line the mark comes first, so it is on the right of the text
-            Rectangle tr = new Rectangle(0, 0, tw + pad, Height);
-            Gfx.TextAt(g, text, f, fore, tr, Align.Right, true, false);
-            Rectangle m = new Rectangle(tr.Right + gap, (Height - mark) / 2, mark, mark);
-            if (Kind == LabelKind.Ok)
-            {
-                Gfx.Dot(g, m, Theme.Primary);
-                using (Pen tick = new Pen(Theme.OnPrimary, 1.8f * Dpi.Scale))
-                {
-                    float k = Dpi.Scale;
-                    tick.StartCap = LineCap.Round; tick.EndCap = LineCap.Round; tick.LineJoin = LineJoin.Round;
-                    g.DrawLines(tick, new PointF[] { new PointF(m.X + 3.8f * k, m.Y + 7.2f * k), new PointF(m.X + 6.0f * k, m.Y + 9.4f * k), new PointF(m.X + 10.2f * k, m.Y + 4.8f * k) });
-                }
-            }
-            else if (Kind == LabelKind.Warn)
-            {
-                Gfx.Dot(g, m, Theme.Warn);
-                Gfx.Text(g, "!", Theme.F(11, true), Theme.OnPrimary, m, true, true);
-            }
-            else Gfx.RingDot(g, m, Parent != null ? Parent.BackColor : Theme.Surface, Theme.Mark, Dpi.Hair);
+            catch (Exception) { tw = Width - dot - gap - padL - padR; }
+            int w = Math.Min(Width, padL + tw + gap + dot + padR);
+            Rectangle pill = new Rectangle(0, 0, w, Height);
+            Gfx.Fill(g, pill, Height / 2, back);
+            // right to left: the dot first (on the right), then the text
+            Rectangle d = new Rectangle(pill.Right - padR - dot, (Height - dot) / 2, dot, dot);
+            Gfx.Dot(g, d, dotColor);
+            Gfx.TextAt(g, text, f, fore, new Rectangle(padL, 0, d.X - gap - padL + Dpi.S(2), Height), Align.Right, true, false);
         }
     }
 
+    // the result of the last action, in a light green (or red) bar with rounded corners and a thin round mark (a tick when it worked,
+    // "!" when it did not): its title in bold and under it the first sentence (the whole text is in the message window that opened with
+    // it). Title and text empty = nothing shown.
+    class InfoBar : BaseControl
+    {
+        public bool Ok = true;
+        string title = "", text = "";
+        public string Title { get { return title; } set { title = value ?? ""; Invalidate(); } }
+        public override string Text { get { return text; } set { text = value ?? ""; Invalidate(); } }
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            Graphics g = e.Graphics;
+            g.Clear(Parent != null ? Parent.BackColor : Theme.Window);
+            if (title.Length == 0 && text.Length == 0) return;
+            g.SmoothingMode = SmoothingMode.AntiAlias; g.PixelOffsetMode = PixelOffsetMode.Half;
+            Gfx.Fill(g, ClientRectangle, Dpi.S(16), Ok ? Theme.OkSoft : Theme.ErrorSoft);
+            int m = Dpi.S(22);
+            Rectangle mark = new Rectangle(Width - Dpi.S(18) - m, title.Length > 0 ? Dpi.S(10) : (Height - m) / 2, m, m);
+            Gfx.LineMark(g, mark, Ok, Ok ? Theme.Ok : Theme.Error);
+            Color head = Ok ? Theme.OnOk : Theme.OnError, fore = Ok ? Theme.OnOkSoft : Theme.OnErrorSoft;
+            int left = Dpi.S(18), w = mark.X - Dpi.S(12) - left;
+            if (title.Length == 0)
+                Gfx.TextAt(g, text, Theme.F(13, false), fore, new Rectangle(left, Dpi.S(8), w, Height - Dpi.S(16)), Align.Right, true, true);
+            else
+            {
+                // two lines, each cut with "…" if it is longer than the bar (the mark stands at the first line)
+                int top = mark.Y + m / 2 - Dpi.S(10);
+                Gfx.Line(g, title, Theme.F(14, true), head, new Rectangle(left, top, w, Dpi.S(20)));
+                Gfx.Line(g, text, Theme.F(13, false), fore, new Rectangle(left, top + Dpi.S(20), w, Dpi.S(19)));
+            }
+        }
+    }
+
+    // a thin round line that fills from the right while an action runs
     class ProgressLine : BaseControl
     {
         int val;
@@ -292,28 +440,48 @@ namespace OtzariaDict
         protected override void OnPaint(PaintEventArgs e)
         {
             Graphics g = e.Graphics;
-            g.Clear(Parent != null ? Parent.BackColor : Theme.Surface);
-            Gfx.Rect(g, ClientRectangle, Theme.Track);
+            g.Clear(Parent != null ? Parent.BackColor : Theme.Window);
+            g.SmoothingMode = SmoothingMode.AntiAlias; g.PixelOffsetMode = PixelOffsetMode.Half;
+            Gfx.Fill(g, ClientRectangle, Height / 2, Theme.Track);
             int w = (int)(Width * (val / 100.0));
-            if (w > 0) Gfx.Rect(g, new Rectangle(Width - w, 0, w, Height), Theme.Primary);   // fills from the right (RTL)
+            if (w > 0) Gfx.Fill(g, new Rectangle(Width - w, 0, w, Height), Height / 2, Theme.Primary);   // fills from the right (RTL)
         }
     }
 
-    enum BtnStyle { Filled, Outlined, Text, Tonal }
+    enum BtnStyle { Filled, Secondary, Text, Tonal }
 
-    // Filled = the blue button · Outlined = white with a grey border · Tonal = white with a blue border (the manual installation) · Text = no frame
+    // A round ("pill") button, flat: Filled = blue with white text · Secondary = light grey · Tonal = light blue with blue text (a quiet
+    // blue button) · Text = only the text, a light blue shape comes under the mouse. Semibold text.
     class FlatBtn : BaseControl
     {
         public BtnStyle Style = BtnStyle.Filled;
-        public bool Light;   // quiet secondary button: regular weight text
         public bool Small;   // small text (the buttons inside a row of the word list)
         bool hover, down, viaMouse;
         string subText = "";
         // a small second line under the text of the button (the install button uses it to say exactly what will be installed)
         public string SubText { get { return subText; } set { subText = value ?? ""; Invalidate(); } }
-        public FlatBtn() { Cursor = Cursors.Hand; TabStop = true; }
-        protected override void OnMouseEnter(EventArgs e) { hover = true; Invalidate(); base.OnMouseEnter(e); }
-        protected override void OnMouseLeave(EventArgs e) { hover = false; down = false; Invalidate(); base.OnMouseLeave(e); }
+        public FlatBtn() { Cursor = Cursors.Hand; TabStop = true; AccessibleRole = AccessibleRole.PushButton; }
+        // the mouse comes and goes softly: hv slides from 0 to 1 (and back) in a short moment, the colours with it (3.1)
+        float hv;
+        System.Windows.Forms.Timer fade;
+        void Fade()
+        {
+            if (fade == null)
+            {
+                fade = new System.Windows.Forms.Timer { Interval = 15 };
+                fade.Tick += delegate
+                {
+                    float target = hover ? 1f : 0f;
+                    hv += (target - hv) * 0.35f;
+                    if (Math.Abs(target - hv) < 0.02f) { hv = target; fade.Stop(); }
+                    Invalidate();
+                };
+            }
+            fade.Start();
+        }
+        protected override void Dispose(bool disposing) { if (disposing && fade != null) fade.Dispose(); base.Dispose(disposing); }
+        protected override void OnMouseEnter(EventArgs e) { hover = true; Fade(); base.OnMouseEnter(e); }
+        protected override void OnMouseLeave(EventArgs e) { hover = false; down = false; Fade(); base.OnMouseLeave(e); }
         protected override void OnMouseDown(MouseEventArgs e) { down = true; viaMouse = true; Focus(); Invalidate(); base.OnMouseDown(e); }
         protected override void OnMouseUp(MouseEventArgs e) { down = false; Invalidate(); base.OnMouseUp(e); }
         protected override void OnEnabledChanged(EventArgs e) { Cursor = Enabled ? Cursors.Hand : Cursors.Default; Invalidate(); base.OnEnabledChanged(e); }
@@ -329,71 +497,220 @@ namespace OtzariaDict
         protected override void OnPaint(PaintEventArgs e)
         {
             Graphics g = e.Graphics;
-            Color page = Parent != null ? Parent.BackColor : Theme.Surface;
+            Color page = Parent != null ? Parent.BackColor : Theme.Window;
             g.Clear(page);
             g.SmoothingMode = SmoothingMode.AntiAlias; g.PixelOffsetMode = PixelOffsetMode.Half;   // Half: whole numbers are pixel EDGES, so shapes and lines land exactly on pixels
             Rectangle r = ClientRectangle;
-            int rad = Dpi.S(3);
-            Color bg = Color.Transparent, fg = Theme.Primary, border = Color.Transparent;
+            int rad = r.Height / 2;
+            // 3.1 (the owner's choice, design B): flat - one colour, no shadow, no sheen; under the mouse the colour turns a shade
+            // darker softly (hv), pressed a shade more
+            Color fg, face;
             if (!Enabled)
             {
                 fg = Theme.DisabledText;
-                if (Style == BtnStyle.Filled) bg = Theme.DisabledBack;
-                else if (Style == BtnStyle.Outlined || Style == BtnStyle.Tonal) { bg = Theme.Card; border = Theme.DisabledLine; }
+                face = Style == BtnStyle.Text ? page : Theme.DisabledBack;
             }
             else if (Style == BtnStyle.Filled)
             {
                 fg = Theme.OnPrimary;
-                bg = down ? Theme.PrimaryDark : hover ? Theme.PrimaryHover : Theme.Primary;
+                face = down ? Theme.PrimaryDark : Gfx.Mix(Theme.Primary, Theme.PrimaryHover, hv);
             }
             else if (Style == BtnStyle.Tonal)
             {
                 fg = Theme.Primary;
-                bg = down ? Theme.SoftHover : hover ? Theme.Soft : Theme.Card;
-                border = Theme.Primary;
+                face = down ? Theme.SoftPill : Gfx.Mix(Theme.Soft, Theme.SoftHover, hv);
             }
-            else if (Style == BtnStyle.Outlined)
+            else if (Style == BtnStyle.Secondary)
             {
                 fg = Theme.Text;
-                bg = down ? Theme.BtnPress : hover ? Theme.BtnHover : Theme.Card;
-                border = Theme.Stroke;
+                face = down ? Theme.SecondaryPress : Gfx.Mix(Theme.Secondary, Theme.SecondaryHover, hv);
             }
             else
             {
-                bg = down ? Theme.SoftHover : hover ? Theme.Soft : Color.Transparent;
+                fg = Theme.Primary;
+                face = down ? Theme.SoftHover : Gfx.Mix(page, Theme.Soft, hv);
             }
-            Color inside = bg == Color.Transparent ? page : bg;   // the colour inside the button (what a focus frame is drawn on)
-            if (border != Color.Transparent) Gfx.Box(g, r, rad, inside, border, Dpi.Hair);
-            else if (bg != Color.Transparent) Gfx.Fill(g, r, rad, bg);
-            if (Focused && Enabled && !viaMouse && ShowFocusCues)   // ShowFocusCues: like every Windows button, the frame appears only once the keyboard (Tab) is used
-                Gfx.Frame(g, Rectangle.Inflate(r, -Dpi.S(3), -Dpi.S(3)), Style == BtnStyle.Filled ? Theme.OnPrimary : Theme.Primary, Dpi.S(2));
+            if (Style != BtnStyle.Text || hv > 0.01f || down) Gfx.Fill(g, r, rad, face);
+            if (Focused && Enabled && !viaMouse && ShowFocusCues)   // ShowFocusCues: like every Windows button, the mark appears only once the keyboard (Tab) is used
+            {
+                int i = Dpi.S(3);
+                Gfx.Ring(g, Rectangle.Inflate(r, -i, -i), rad - i, Style == BtnStyle.Filled ? Theme.OnPrimary : Theme.Primary, Math.Max(2, Dpi.S(2)));
+            }
 
-            bool big = Style == BtnStyle.Filled || (Style == BtnStyle.Outlined && !Light);
-            Font f = Theme.F(Small ? 13 : (big ? 15 : 14), !Light);
+            Font f = Theme.F(Small ? 13 : 15, true);
+            int side = Math.Max(Dpi.S(8), rad / 2);
             if (subText.Length == 0)
-                Gfx.TextAt(g, Text, f, fg, new Rectangle(Dpi.S(8), 0, Width - Dpi.S(16), Height), Align.Center, true, false);
+                Gfx.TextAt(g, Text, f, fg, new Rectangle(side, 0, Width - 2 * side, r.Height), Align.Center, true, false);
             else
             {
                 Color sub = Enabled ? (Style == BtnStyle.Filled ? Theme.OnPrimarySoft : Theme.TextSoft) : fg;
-                Gfx.TextAt(g, Text, f, fg, new Rectangle(Dpi.S(8), Dpi.S(3), Width - Dpi.S(16), Dpi.S(23)), Align.Center, true, false);
-                Gfx.TextAt(g, subText, Theme.F(13, false), sub, new Rectangle(Dpi.S(8), Dpi.S(26), Width - Dpi.S(16), Dpi.S(17)), Align.Center, true, false);
+                int top = (r.Height - Dpi.S(38)) / 2;
+                Gfx.TextAt(g, Text, Theme.F(15.5f, true), fg, new Rectangle(side, top, Width - 2 * side, Dpi.S(21)), Align.Center, true, false);
+                Gfx.TextAt(g, subText, Theme.F(12, false), sub, new Rectangle(side, top + Dpi.S(21), Width - 2 * side, Dpi.S(17)), Align.Center, true, false);
             }
         }
     }
 
-    enum RowPos { First, Middle, Last }
+    enum Glyph { Pencil, Folder, Double, Trash }
 
-    // One row of the list (three of them, one above the other, make the list): a round radio mark (pick one) or a square tick box (CheckStyle, on/off).
-    // Every row draws its own part of the frame: the outer border on both sides (and on top / at the bottom for the first / last row), a light line between rows.
+    // one of the four tools under the main buttons (3.1, design B): a white tile with rounded corners, a drawn line icon in a light blue
+    // circle, and the name under it. Under the mouse the tile turns a little blue and a light blue ring comes round it (softly: hv 0 -> 1).
+    class IconBtn : BaseControl
+    {
+        public Glyph Icon;
+        bool hover, down, viaMouse;
+        public IconBtn() { Cursor = Cursors.Hand; TabStop = true; AccessibleRole = AccessibleRole.PushButton; }
+        // the mouse comes and goes softly: hv slides from 0 to 1 (and back) in a short moment, the colours with it
+        float hv;
+        System.Windows.Forms.Timer fade;
+        void Fade()
+        {
+            if (fade == null)
+            {
+                fade = new System.Windows.Forms.Timer { Interval = 15 };
+                fade.Tick += delegate
+                {
+                    float target = hover ? 1f : 0f;
+                    hv += (target - hv) * 0.35f;
+                    if (Math.Abs(target - hv) < 0.02f) { hv = target; fade.Stop(); }
+                    Invalidate();
+                };
+            }
+            fade.Start();
+        }
+        protected override void Dispose(bool disposing) { if (disposing && fade != null) fade.Dispose(); base.Dispose(disposing); }
+        protected override void OnMouseEnter(EventArgs e) { hover = true; Fade(); base.OnMouseEnter(e); }
+        protected override void OnMouseLeave(EventArgs e) { hover = false; down = false; Fade(); base.OnMouseLeave(e); }
+        protected override void OnMouseDown(MouseEventArgs e) { down = true; viaMouse = true; Focus(); Invalidate(); base.OnMouseDown(e); }
+        protected override void OnMouseUp(MouseEventArgs e) { down = false; Invalidate(); base.OnMouseUp(e); }
+        protected override void OnEnabledChanged(EventArgs e) { Cursor = Enabled ? Cursors.Hand : Cursors.Default; Invalidate(); base.OnEnabledChanged(e); }
+        protected override void OnGotFocus(EventArgs e) { Invalidate(); base.OnGotFocus(e); }
+        protected override void OnLostFocus(EventArgs e) { viaMouse = false; Invalidate(); base.OnLostFocus(e); }
+        protected override bool IsInputKey(Keys k) { return k == Keys.Enter || k == Keys.Space || base.IsInputKey(k); }
+        protected override void OnKeyDown(KeyEventArgs e)
+        {
+            viaMouse = false;
+            if (e.KeyCode == Keys.Enter || e.KeyCode == Keys.Space) { OnClick(EventArgs.Empty); e.Handled = true; }
+            base.OnKeyDown(e);
+        }
+        public override string Text { get { return base.Text; } set { base.Text = value; Invalidate(); } }
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            Graphics g = e.Graphics;
+            Color page = Parent != null ? Parent.BackColor : Theme.Window;
+            g.Clear(page);
+            g.SmoothingMode = SmoothingMode.AntiAlias; g.PixelOffsetMode = PixelOffsetMode.Half;
+            Rectangle r = ClientRectangle;
+            int rad = Dpi.S(16);
+            float h = Enabled ? hv : 0f;
+            Gfx.Fill(g, r, rad, down && Enabled ? Theme.Soft : Gfx.Mix(Theme.Card, Theme.CardHover, h));
+            if (h > 0.01f || (down && Enabled)) Gfx.Ring(g, r, rad, Gfx.Mix(Theme.Card, Theme.RingHover, down ? 1f : h), Math.Max(2, Dpi.S(2)));
+            if (Focused && Enabled && !viaMouse && ShowFocusCues)
+            {
+                int i = Dpi.S(3);
+                Gfx.Ring(g, Rectangle.Inflate(r, -i, -i), rad - i, Theme.Primary, Math.Max(2, Dpi.S(2)));
+            }
+            // the icon in its circle, in the middle of the upper part; the name under it
+            int d = Dpi.S(32);
+            Rectangle circle = new Rectangle((Width - d) / 2, Dpi.S(11), d, d);
+            Gfx.Dot(g, circle, Enabled ? Gfx.Mix(Theme.IconBack, Theme.SoftPill, down ? 1f : h) : Theme.DisabledBack);
+            int pad = Dpi.S(6);
+            DrawGlyph(g, Icon, Rectangle.Inflate(circle, -pad, -pad), Enabled ? Theme.Primary : Theme.DisabledText);
+            Gfx.TextAt(g, Text, Theme.F(13.5f, false), Enabled ? Theme.Text : Theme.DisabledText,
+                       new Rectangle(Dpi.S(6), circle.Bottom + Dpi.S(5), Width - Dpi.S(12), Dpi.S(19)), Align.Center, true, false);
+        }
+
+        // simple line icons, drawn (no icon font is needed), in units of 24: a pencil, a folder, "=" (a word twice), a bin
+        public static void DrawGlyph(Graphics g, Glyph kind, Rectangle r, Color c)
+        {
+            float k = r.Width / 24f, x = r.X, y = r.Y;
+            using (Pen p = Gfx.IconPen(c, Math.Max(1.6f, 1.75f * k)))
+            {
+                if (kind == Glyph.Pencil)
+                {
+                    g.DrawPolygon(p, new PointF[] { new PointF(x + 4f * k, y + 20f * k), new PointF(x + 8f * k, y + 20f * k), new PointF(x + 19f * k, y + 9f * k),
+                                                    new PointF(x + 15f * k, y + 5f * k), new PointF(x + 4f * k, y + 16f * k) });
+                    g.DrawLine(p, x + 13.5f * k, y + 6.5f * k, x + 17.5f * k, y + 10.5f * k);
+                }
+                else if (kind == Glyph.Folder)
+                {
+                    // a folder with rounded corners, its tab on the upper left
+                    using (GraphicsPath f = new GraphicsPath())
+                    {
+                        float a = 4f * k;   // the diameter of a corner
+                        f.AddArc(x + 3f * k, y + 5.5f * k, a, a, 180, 90);
+                        f.AddLine(x + 5f * k, y + 5.5f * k, x + 9f * k, y + 5.5f * k);
+                        f.AddLine(x + 9f * k, y + 5.5f * k, x + 11f * k, y + 7.5f * k);
+                        f.AddLine(x + 11f * k, y + 7.5f * k, x + 19f * k, y + 7.5f * k);
+                        f.AddArc(x + 17f * k, y + 7.5f * k, a, a, 270, 90);
+                        f.AddArc(x + 17f * k, y + 15.5f * k, a, a, 0, 90);
+                        f.AddArc(x + 3f * k, y + 15.5f * k, a, a, 90, 90);
+                        f.CloseFigure();
+                        g.DrawPath(p, f);
+                    }
+                }
+                else if (kind == Glyph.Double)
+                {
+                    g.DrawLine(p, x + 5f * k, y + 9f * k, x + 19f * k, y + 9f * k);
+                    g.DrawLine(p, x + 5f * k, y + 15f * k, x + 19f * k, y + 15f * k);
+                }
+                else
+                {
+                    g.DrawLine(p, x + 4f * k, y + 7f * k, x + 20f * k, y + 7f * k);
+                    g.DrawLines(p, new PointF[] { new PointF(x + 9.5f * k, y + 7f * k), new PointF(x + 9.5f * k, y + 4.5f * k), new PointF(x + 14.5f * k, y + 4.5f * k), new PointF(x + 14.5f * k, y + 7f * k) });
+                    g.DrawLines(p, new PointF[] { new PointF(x + 6.5f * k, y + 7f * k), new PointF(x + 7.5f * k, y + 19.5f * k), new PointF(x + 16.5f * k, y + 19.5f * k), new PointF(x + 17.5f * k, y + 7f * k) });
+                }
+            }
+        }
+    }
+
+    // One card of the choice (three of them, one under the other, with a gap): a round mark (pick one) or a switch (CheckStyle, on/off).
+    // A white card with big rounded corners and no border; the chosen one is light blue with a blue ring. The word count is a pill on the left.
     class OptionRow : BaseControl
     {
         public string Title = "", Desc = "", Count = "";
         public bool CheckStyle;
-        public RowPos Pos = RowPos.Middle;
+        public bool CountRoom = true;   // keep the place of the count pill also while Count is empty (the main window fills it in later)
+        public bool Highlight = true;   // the chosen card is light blue with a blue border (false: only its switch shows it - a list of choices)
         bool selected, hover, viaMouse;
         public event EventHandler Chosen;
-        public bool Selected { get { return selected; } set { selected = value; Invalidate(); } }
-        public OptionRow() { Cursor = Cursors.Hand; TabStop = true; }
+        public bool Selected
+        {
+            get { return selected; }
+            set
+            {
+                if (value != selected && CheckStyle && IsHandleCreated && Visible) StartSlide(value);
+                selected = value;
+                Invalidate();
+            }
+        }
+        public OptionRow() { Cursor = Cursors.Hand; TabStop = true; AccessibleRole = AccessibleRole.CheckButton; }
+
+        // 3.1 (the user: the switch should slide elegantly): the knob slides across in 180 ms, slowing down at the end, and the colour of
+        // the switch changes with it. slideFrom / slideTo: 0 = off, 1 = on.
+        float slideFrom, slideTo;
+        DateTime slideStart;
+        System.Windows.Forms.Timer slide;
+        void StartSlide(bool on)
+        {
+            slideFrom = SwitchPos();
+            slideTo = on ? 1f : 0f;
+            slideStart = DateTime.UtcNow;
+            if (slide == null)
+            {
+                slide = new System.Windows.Forms.Timer { Interval = 15 };
+                slide.Tick += delegate { Invalidate(); if (SlideT() >= 1f) slide.Stop(); };
+            }
+            slide.Start();
+        }
+        float SlideT() { return Math.Min(1f, (float)(DateTime.UtcNow - slideStart).TotalMilliseconds / 180f); }
+        float SwitchPos()
+        {
+            if (slide == null || !slide.Enabled) return selected ? 1f : 0f;
+            float t = SlideT(), eased = 1f - (1f - t) * (1f - t) * (1f - t);
+            return slideFrom + (slideTo - slideFrom) * eased;
+        }
+        protected override void Dispose(bool disposing) { if (disposing && slide != null) slide.Dispose(); base.Dispose(disposing); }
         protected override void OnMouseEnter(EventArgs e) { hover = true; Invalidate(); base.OnMouseEnter(e); }
         protected override void OnMouseLeave(EventArgs e) { hover = false; Invalidate(); base.OnMouseLeave(e); }
         protected override void OnMouseDown(MouseEventArgs e) { viaMouse = true; base.OnMouseDown(e); }
@@ -411,50 +728,68 @@ namespace OtzariaDict
         {
             Graphics g = e.Graphics;
             g.SmoothingMode = SmoothingMode.AntiAlias; g.PixelOffsetMode = PixelOffsetMode.Half;   // Half: whole numbers are pixel EDGES, so shapes and lines land exactly on pixels
+            g.Clear(Parent != null ? Parent.BackColor : Theme.Window);
+            // 3.1 (design B): flat - no border and no shadow; the chosen card is light blue with a blue ring, a card under the mouse gets
+            // a light blue ring
             Rectangle r = ClientRectangle;
-            int hair = Dpi.Hair;
-            Color back = selected ? Theme.Soft : (hover ? Theme.RowHover : Theme.Card);
-            Gfx.Rect(g, r, back);
+            int rad = Dpi.S(18), ringW = Math.Max(2, Dpi.S(2));
+            bool lit = selected && Highlight;
+            Color back = lit ? Theme.Soft : (hover ? Theme.CardHover : Theme.Card);
+            Gfx.Fill(g, r, rad, back);
+            if (lit) Gfx.Ring(g, r, rad, Theme.Primary, ringW);
+            else if (hover) Gfx.Ring(g, r, rad, Theme.RingHover, ringW);
+            if (Focused && !viaMouse && ShowFocusCues)
+            {
+                int i = Dpi.S(5);
+                Gfx.Ring(g, Rectangle.Inflate(r, -i, -i), rad - i, Theme.Primary, ringW);
+            }
 
-            // frame
-            Gfx.Rect(g, new Rectangle(r.X, r.Y, hair, r.Height), Theme.Stroke);
-            Gfx.Rect(g, new Rectangle(r.Right - hair, r.Y, hair, r.Height), Theme.Stroke);
-            if (Pos == RowPos.First) Gfx.Rect(g, new Rectangle(r.X, r.Y, r.Width, hair), Theme.Stroke);
-            else Gfx.Rect(g, new Rectangle(r.X + hair, r.Y, r.Width - 2 * hair, hair), Theme.Line);
-            if (Pos == RowPos.Last) Gfx.Rect(g, new Rectangle(r.X, r.Bottom - hair, r.Width, hair), Theme.Stroke);
-            Rectangle c = new Rectangle(r.X + hair, r.Y + hair, r.Width - 2 * hair, r.Height - hair - (Pos == RowPos.Last ? hair : 0));   // inside the frame
-
-            if (selected) Gfx.Rect(g, new Rectangle(c.Right - Dpi.S(4), c.Y, Dpi.S(4), c.Height), Theme.Primary);   // the blue bar of the chosen row
-            if (Focused && !viaMouse && ShowFocusCues) Gfx.Frame(g, Rectangle.Inflate(c, -Dpi.S(5), -Dpi.S(5)), Theme.Primary, Dpi.S(2));
-
-            // mark on the right
-            int m = Dpi.S(20), bw = Dpi.S(2);
-            Rectangle dot = new Rectangle(c.Right - Dpi.S(22) - m, c.Y + (c.Height - m) / 2, m, m);
+            // the mark on the right: a round mark, or a switch
+            int markRight = r.Right - Dpi.S(20);
+            int markLeft;
             if (CheckStyle)
             {
-                if (selected) Gfx.Fill(g, dot, Dpi.S(2), Theme.Primary);
-                else Gfx.Box(g, dot, Dpi.S(2), back, Theme.Mark, bw);
-                if (selected)
-                    using (Pen tick = new Pen(Theme.OnPrimary, 2.2f * Dpi.Scale))
-                    {
-                        float k = Dpi.Scale;
-                        tick.StartCap = LineCap.Round; tick.EndCap = LineCap.Round; tick.LineJoin = LineJoin.Round;
-                        g.DrawLines(tick, new PointF[] { new PointF(dot.X + 4.5f * k, dot.Y + 10.2f * k), new PointF(dot.X + 8.2f * k, dot.Y + 13.8f * k), new PointF(dot.X + 15.2f * k, dot.Y + 6.4f * k) });
-                    }
+                Rectangle sw = new Rectangle(markRight - Dpi.S(44), r.Y + (r.Height - Dpi.S(26)) / 2, Dpi.S(44), Dpi.S(26));
+                float p = SwitchPos();   // 0 = off (the knob on the right), 1 = on (the knob on the left: right to left)
+                int knob = Dpi.S(18), pad = (sw.Height - knob) / 2;
+                Gfx.Fill(g, sw, sw.Height / 2, Gfx.Mix(hover ? Theme.SwitchOffHover : Theme.SwitchOff, hover ? Theme.PrimaryHover : Theme.Primary, p));
+                int kx = (int)Math.Round((sw.Right - pad - knob) + ((sw.X + pad) - (sw.Right - pad - knob)) * p);
+                Gfx.Dot(g, new Rectangle(kx, sw.Y + pad, knob, knob), Theme.OnPrimary);
+                markLeft = sw.X;
             }
             else
             {
-                Gfx.RingDot(g, dot, back, selected ? Theme.Primary : Theme.Mark, bw);
-                if (selected) Gfx.Dot(g, Rectangle.Inflate(dot, -Dpi.S(5), -Dpi.S(5)), Theme.Primary);
+                int m = Dpi.S(22);
+                Rectangle dot = new Rectangle(markRight - m, r.Y + (r.Height - m) / 2, m, m);
+                if (selected)
+                {
+                    Gfx.Dot(g, dot, Theme.Primary);
+                    Gfx.Dot(g, Rectangle.Inflate(dot, -Dpi.S(7), -Dpi.S(7)), Theme.OnPrimary);
+                }
+                else Gfx.RingDot(g, dot, back, hover ? Theme.MarkHover : Theme.Mark, ringW);
+                markLeft = dot.X;
             }
 
-            int textRight = dot.X - Dpi.S(16);
-            int textLeft = c.X + Dpi.S(150);
-            int top = c.Y + (c.Height - Dpi.S(60)) / 2;   // title (22) + two lines of description (2 x 19) = 60, in the middle of the row
-            Gfx.TextAt(g, Title, Theme.F(16, true), Theme.Text, new Rectangle(textLeft, top, textRight - textLeft, Dpi.S(22)), Align.Right, true, false);
-            Gfx.TextAt(g, Desc, Theme.F(14, false), Theme.TextSoft, new Rectangle(textLeft, top + Dpi.S(22), textRight - textLeft, Dpi.S(40)), Align.Right, false, true);
-            // the number of words, on the left
-            Gfx.TextAt(g, Count, Theme.F(14, true), selected ? Theme.PrimaryDark : Theme.TextSoft, new Rectangle(c.X + Dpi.S(20), c.Y, Dpi.S(116), c.Height), Align.Left, true, false);
+            // the number of words: a pill on the left
+            Font cf = Theme.F(12.5f, true);
+            int pillW = 0;
+            if (Count.Length > 0)
+            {
+                int tw;
+                try { tw = TextRenderer.MeasureText(g, Count, cf, new Size(Width, Height), TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix | TextFormatFlags.SingleLine).Width; }
+                catch (Exception) { tw = Dpi.S(90); }
+                pillW = tw + Dpi.S(26);
+                Rectangle pill = new Rectangle(r.X + Dpi.S(20), r.Y + (r.Height - Dpi.S(28)) / 2, pillW, Dpi.S(28));
+                Gfx.Fill(g, pill, pill.Height / 2, lit ? Theme.SoftPill : Theme.Pill);
+                Gfx.TextAt(g, Count, cf, lit ? Theme.OnSoftPill : Theme.OnPill, pill, Align.Center, true, false);
+            }
+
+            int textRight = markLeft - Dpi.S(16);
+            // (a card without a count - the choices of the advanced removal - gives its text the whole width)
+            int textLeft = r.X + Dpi.S(20) + (Count.Length > 0 || CountRoom ? Math.Max(pillW, Dpi.S(110)) + Dpi.S(20) : 0);
+            int top = r.Y + (r.Height - Dpi.S(62)) / 2;   // title (22) + two lines of description (2 x 20) = 62, in the middle of the card
+            Gfx.TextAt(g, Title, Theme.F(15.5f, true), Theme.Text, new Rectangle(textLeft, top, textRight - textLeft, Dpi.S(22)), Align.Right, true, false);
+            Gfx.TextAt(g, Desc, Theme.F(13, false), Theme.TextSoft, new Rectangle(textLeft, top + Dpi.S(23), textRight - textLeft, Dpi.S(40)), Align.Right, false, true);
         }
     }
 
@@ -473,29 +808,37 @@ namespace OtzariaDict
             AutoScaleMode = AutoScaleMode.None;
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = false; MinimizeBox = false; ShowInTaskbar = false;
-            StartPosition = FormStartPosition.CenterParent;
-            BackColor = Theme.Card;
+            if (Dpi.Forced) { StartPosition = FormStartPosition.Manual; Location = new Point(0, 0); }   // the developer's screenshots
+            else StartPosition = FormStartPosition.CenterParent;
+            BackColor = Theme.Window;
             Font = Theme.F(14, false);
-            ClientSize = Dpi.Sz(560, 360);
             Icon = MainForm.AppIcon();
 
             string job = installing ? "ההתקנה" : "ההסרה";
             string goOn = installing
                 ? "המילון יותקן, אבל וורד יכיר אותו רק אחרי שתסגרו אותו ותפתחו אותו מחדש."
                 : "המילון יוסר, אבל וורד יפסיק להשתמש בו רק אחרי שתסגרו אותו ותפתחו אותו מחדש.";
-            TextBlock head = new TextBlock { Bounds = Dpi.R(28, 20, 504, 34), Font = Theme.F(22, true), Color = Theme.Text, VCenter = true, Wrap = false, Text = "וורד פתוח עכשיו" };
+            MarkTitle head = new MarkTitle { Bounds = Dpi.R(28, 24, 504, 32), Kind = MsgKind.Warn, Font = Theme.F(20, true), Text = "וורד פתוח עכשיו" };
             TextBlock body = new TextBlock
             {
-                Bounds = Dpi.R(28, 64, 504, 214), Font = Theme.F(14, false), Color = Theme.Text,
+                Bounds = Dpi.R(28, 68, 504, 212), Font = Theme.F(14, false), Color = Theme.Text,
                 Text = "וורד טוען את המילונים רק כשהוא נפתח, ולכן כדאי לסגור אותו לפני " + job + ".\r\n\r\n"
                      + "שמרו את המסמכים, סגרו את כל חלונות וורד ולחצו על \"בדוק שוב\".\r\n\r\n"
                      + "אין חלון וורד פתוח? ייתכן שוורד רץ ברקע, למשל בגלל תוכנה אחרת. חכו רגע ולחצו שוב, ואם זה לא עוזר, הפעילו את המחשב מחדש.\r\n\r\n"
                      + "אפשר גם ללחוץ על \"המשך בכל זאת\": " + goOn
             };
-            LowerPanel strip = new LowerPanel { Bounds = Dpi.R(0, 280, 560, 80) };
-            FlatBtn again = new FlatBtn { Bounds = Dpi.R(372, 18, 160, 44), Text = "בדוק שוב", Style = BtnStyle.Filled };
-            FlatBtn goOnBtn = new FlatBtn { Bounds = Dpi.R(180, 18, 180, 44), Text = "המשך בכל זאת", Style = BtnStyle.Outlined };
-            FlatBtn cancel = new FlatBtn { Bounds = Dpi.R(58, 18, 110, 44), Text = "ביטול", Style = BtnStyle.Outlined };
+            // the text as high as it is with the fonts of this computer, the buttons 26 under it
+            try
+            {
+                body.Height = TextRenderer.MeasureText(body.Text, body.Font, new Size(body.Width, int.MaxValue),
+                    TextFormatFlags.RightToLeft | TextFormatFlags.NoPrefix | TextFormatFlags.WordBreak | TextFormatFlags.TextBoxControl).Height + Dpi.S(4);
+            }
+            catch (Exception) { }
+            LowerPanel strip = new LowerPanel { Bounds = new Rectangle(0, body.Bottom + Dpi.S(26), Dpi.S(560), Dpi.S(68)) };
+            ClientSize = new Size(Dpi.S(560), strip.Bottom);
+            FlatBtn again = new FlatBtn { Bounds = Dpi.R(372, 0, 160, 44), Text = "בדוק שוב", Style = BtnStyle.Filled };
+            FlatBtn goOnBtn = new FlatBtn { Bounds = Dpi.R(180, 0, 180, 44), Text = "המשך בכל זאת", Style = BtnStyle.Secondary };
+            FlatBtn cancel = new FlatBtn { Bounds = Dpi.R(58, 0, 110, 44), Text = "ביטול", Style = BtnStyle.Secondary };
             again.Click += delegate { Choice = Again; Close(); };
             goOnBtn.Click += delegate { Choice = GoOn; Close(); };
             cancel.Click += delegate { Choice = Cancel; Close(); };
@@ -511,18 +854,256 @@ namespace OtzariaDict
         }
     }
 
+    // ------------------------------------------------------------------------------------------ a message or a question
+    enum MsgKind { Ok, Info, Warn, Error, Question }
+
+    // the title of a message window: a light round mark at its start (on the right), then the text (it may take two lines)
+    class MarkTitle : BaseControl
+    {
+        public MsgKind Kind = MsgKind.Info;
+        public const int MarkUnits = 30, GapUnits = 12;   // the mark and the gap after it, in design units
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            Graphics g = e.Graphics;
+            g.Clear(Parent != null ? Parent.BackColor : Theme.Window);
+            g.SmoothingMode = SmoothingMode.AntiAlias; g.PixelOffsetMode = PixelOffsetMode.Half;
+            int mark = Dpi.S(MarkUnits), gap = Dpi.S(GapUnits), line = Dpi.S(32);
+            Rectangle m = new Rectangle(Width - mark, (line - mark) / 2, mark, mark);
+            Gfx.SoftMark(g, m, Kind);
+            Gfx.TextAt(g, Text, Font, Theme.Text, new Rectangle(0, 0, m.X - gap, Height), Align.Right, Height <= line, true);
+        }
+    }
+
+    // 3.1: a message or a question in the look of the program, instead of the plain message box of Windows - a title with a round mark,
+    // the text, and round buttons (in Hebrew on every Windows) at the bottom. The window is as high as its text; a very long text
+    // scrolls. Escape and the close box give the safe answer.
+    class MsgDialog : Form
+    {
+        DialogResult answer;
+        readonly DialogResult escape;
+        static readonly TextFormatFlags Wrap = TextFormatFlags.RightToLeft | TextFormatFlags.NoPrefix | TextFormatFlags.WordBreak | TextFormatFlags.TextBoxControl;
+
+        // labels / answers: the buttons from right to left - the first one is the blue one; focus = the button that has the focus at the start
+        // (Enter presses it); escapeAnswer = the answer of Escape and of the close box
+        MsgDialog(string text, string title, MsgKind kind, string[] labels, DialogResult[] answers, int focus, DialogResult escapeAnswer)
+        {
+            answer = escape = escapeAnswer;
+            Text = MainForm.Title;
+            AutoScaleMode = AutoScaleMode.None;
+            FormBorderStyle = FormBorderStyle.FixedDialog;
+            MaximizeBox = false; MinimizeBox = false; ShowInTaskbar = false;
+            if (Dpi.Forced) { StartPosition = FormStartPosition.Manual; Location = new Point(0, 0); }   // the developer's screenshots
+            else StartPosition = FormStartPosition.CenterParent;
+            BackColor = Theme.Window;
+            Font = Theme.F(14, false);
+            Icon = MainForm.AppIcon();
+            // a screen reader announces a dialog, its title and its text (the text is painted, so it is given here too)
+            AccessibleRole = AccessibleRole.Dialog;
+            AccessibleName = title;
+            AccessibleDescription = text;
+            copyText = title + "\r\n\r\n" + text;
+
+            int width = Dpi.S(520), pad = Dpi.S(28), inner = width - 2 * pad;
+            Font titleFont = Theme.F(20, true), bodyFont = Theme.F(14, false);
+            int titleW = inner - Dpi.S(MarkTitle.MarkUnits) - Dpi.S(MarkTitle.GapUnits);
+            int titleH = Math.Max(Dpi.S(32), TextRenderer.MeasureText(title, titleFont, new Size(titleW, int.MaxValue), Wrap).Height + Dpi.S(2));
+            MarkTitle head = new MarkTitle { Bounds = new Rectangle(pad, Dpi.S(24), inner, titleH), Kind = kind, Font = titleFont, Text = title };
+            head.AccessibleName = title; head.AccessibleRole = AccessibleRole.StaticText;
+
+            // the text: as high as it needs, up to what the screen has room for; beyond that it scrolls
+            int top = head.Bottom + Dpi.S(12);
+            int need = TextRenderer.MeasureText(text, bodyFont, new Size(inner, int.MaxValue), Wrap).Height + Dpi.S(4);
+            int room = Dpi.S(440);
+            try
+            {
+                int frame = SystemInformation.CaptionHeight + 2 * SystemInformation.FixedFrameBorderSize.Height + Dpi.S(16);
+                room = Math.Min(room, Screen.PrimaryScreen.WorkingArea.Height - frame - top - Dpi.S(26 + 68));
+            }
+            catch (Exception) { }
+            room = Math.Max(room, Dpi.S(120));
+            Control body;
+            if (need <= room)
+                body = new TextBlock { Bounds = new Rectangle(pad, top, inner, need), Font = bodyFont, Color = Theme.Text, Text = text };
+            else
+                body = new TextBox
+                {
+                    Bounds = new Rectangle(pad, top, inner, room), Multiline = true, ReadOnly = true, ScrollBars = ScrollBars.Vertical, WordWrap = true,
+                    BorderStyle = BorderStyle.None, BackColor = Theme.Window, ForeColor = Theme.Text, Font = bodyFont, RightToLeft = RightToLeft.Yes,
+                    TabStop = true, Text = text   // reachable with Tab, to scroll and copy with the keyboard
+                };
+            body.AccessibleName = text; body.AccessibleRole = AccessibleRole.StaticText;
+
+            LowerPanel strip = new LowerPanel { Bounds = new Rectangle(0, body.Bottom + Dpi.S(26), width, Dpi.S(68)) };
+            List<FlatBtn> buttons = new List<FlatBtn>();
+            int x = width - pad;
+            for (int i = 0; i < labels.Length; i++)
+            {
+                Font f = Theme.F(15, true);   // the font FlatBtn draws them with
+                int w = Math.Max(Dpi.S(110), TextRenderer.MeasureText(labels[i], f).Width + Dpi.S(48));
+                x -= w;
+                FlatBtn b = new FlatBtn { Bounds = new Rectangle(x, 0, w, Dpi.S(44)), Text = labels[i], Style = i == 0 ? BtnStyle.Filled : BtnStyle.Secondary };
+                b.AccessibleName = labels[i];
+                b.AccessibleRole = AccessibleRole.PushButton;
+                DialogResult a = answers[i];
+                b.Click += delegate { answer = a; Close(); };
+                buttons.Add(b);
+                x -= Dpi.S(12);
+            }
+            strip.Controls.AddRange(buttons.ToArray());   // the tab order follows this order (right to left)
+            Controls.AddRange(new Control[] { head, body, strip });
+            ClientSize = new Size(width, strip.Bottom);
+            FlatBtn first = buttons[Math.Max(0, Math.Min(focus, buttons.Count - 1))];
+            first.AccessibleDescription = title + ". " + text;   // read out with the button that has the focus when the window opens
+            ActiveControl = first;
+        }
+
+        readonly string copyText;
+
+        protected override bool ProcessDialogKey(Keys keyData)
+        {
+            if (keyData == Keys.Escape) { answer = escape; Close(); return true; }
+            return base.ProcessDialogKey(keyData);
+        }
+
+        // Ctrl+C copies the title and the text, as the Windows message box does (in the scrolling text box it copies what is selected there)
+        protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
+        {
+            if (keyData == (Keys.Control | Keys.C) && !(ActiveControl is TextBox))
+            {
+                try { Clipboard.SetText(copyText); } catch (Exception) { }
+                return true;
+            }
+            return base.ProcessCmdKey(ref msg, keyData);
+        }
+
+        // the sound of the Windows message box of the same kind
+        static void Sound(MsgKind kind)
+        {
+            if (Environment.OSVersion.Platform != PlatformID.Win32NT) return;
+            try
+            {
+                if (kind == MsgKind.Warn || kind == MsgKind.Error) System.Media.SystemSounds.Exclamation.Play();
+                else if (kind == MsgKind.Ok || kind == MsgKind.Info) System.Media.SystemSounds.Asterisk.Play();
+            }
+            catch (Exception) { }
+        }
+
+        public static DialogResult Show(IWin32Window owner, string text, string title, MsgKind kind, string[] labels, DialogResult[] answers, int focus, DialogResult escapeAnswer)
+        {
+            Sound(kind);
+            using (MsgDialog d = new MsgDialog(text ?? "", title ?? "", kind, labels, answers, focus, escapeAnswer))
+            {
+                if (owner != null) d.ShowDialog(owner); else d.ShowDialog();
+                return d.answer;
+            }
+        }
+
+        // a message with one button
+        public static void Tell(IWin32Window owner, string text, string title, MsgKind kind)
+        {
+            Show(owner, text, title, kind, new string[] { "אישור" }, new DialogResult[] { DialogResult.OK }, 0, DialogResult.OK);
+        }
+
+        // a yes / no question about something that cannot easily be undone: the focus (Enter) starts on "no"
+        public static DialogResult YesNo(IWin32Window owner, string text, string title)
+        {
+            return Show(owner, text, title, MsgKind.Warn, new string[] { "כן", "לא" }, new DialogResult[] { DialogResult.Yes, DialogResult.No }, 1, DialogResult.No);
+        }
+    }
+
+    // ------------------------------------------------------------------------------------------ the advanced removal: its choices
+    // 3.1 (the user, 9-11): the advanced removal is a set of choices, each a card with a switch. The dangerous one (every custom dictionary)
+    // is off at the start; "הסר" works only when something is chosen.
+    class AdvancedDialog : Form
+    {
+        public readonly AdvancedOptions Options = new AdvancedOptions();
+        public bool Go;
+        readonly OptionRow rOurs, rPersonal, rList, rRepeat, rAll;
+        readonly FlatBtn go;
+
+        public AdvancedDialog(bool repeatOff)
+        {
+            Text = MainForm.Title;
+            AutoScaleMode = AutoScaleMode.None;
+            FormBorderStyle = FormBorderStyle.FixedDialog;
+            MaximizeBox = false; MinimizeBox = false; ShowInTaskbar = false;
+            if (Dpi.Forced) { StartPosition = FormStartPosition.Manual; Location = new Point(0, 0); }
+            else StartPosition = FormStartPosition.CenterParent;
+            BackColor = Theme.Window;
+            Font = Theme.F(14, false);
+            Icon = MainForm.AppIcon();
+            AccessibleRole = AccessibleRole.Dialog;
+            AccessibleName = "הסרה מתקדמת";
+
+            MarkTitle head = new MarkTitle { Bounds = Dpi.R(28, 24, 564, 32), Kind = MsgKind.Warn, Font = Theme.F(20, true), Text = "הסרה מתקדמת" };
+            TextBlock lead = new TextBlock { Bounds = Dpi.R(28, 62, 564, 24), Font = Theme.F(14, false), Color = Theme.TextSoft,
+                Text = "בחרו מה לעשות. לפני כל שינוי נשמר עותק גיבוי." };
+            rOurs = Row(98, "הסרת המילון התורני", "כמו \"הסר מוורד\": המילון יוצא מוורד. מילים שהוספתם בעצמכם נשמרות.", Options.RemoveOurs);
+            rPersonal = Row(186, "הסרת המילים שלו גם מהמילון האישי של וורד",
+                "המילון של \"הוסף למילון\", וגם CUSTOM.DIC של גרסה 2.0. רק מילים של המילון התורני יוצאות; שאר המילים שלכם נשארות.", Options.CleanPersonal);
+            rList = Row(274, "תיקון רשימת המילונים של וורד",
+                "מנקה מהרשימה של וורד רשומות ישנות של התוכנה ושל בדיקות, שחוסמות הוספת מילונים (למשל אחרי בדיקת הגודל).", Options.RepairList);
+            // (on at first only when this program switched the marking off; the person may have switched it off in Word, so the text
+            // does not claim that it is on)
+            rRepeat = Row(362, "החזרת סימון מילים כפולות", "וורד יחזור לסמן כשגיאה מילים שחוזרות פעמיים ברצף.", Options.RestoreRepeated && repeatOff);
+            rAll = Row(450, "מחיקת כל המילונים המותאמים אישית",
+                "זהירות: כל המילונים, גם שלכם ושל תוכנות אחרות. יישאר רק המילון המובנה של וורד.", Options.RemoveAll);
+
+            LowerPanel strip = new LowerPanel { Bounds = Dpi.R(0, 554, 620, 68) };
+            go = new FlatBtn { Bounds = Dpi.R(452, 0, 140, 44), Text = "הסר", Style = BtnStyle.Filled, AccessibleName = "הסר" };
+            FlatBtn cancel = new FlatBtn { Bounds = Dpi.R(300, 0, 140, 44), Text = "ביטול", Style = BtnStyle.Secondary, AccessibleName = "ביטול" };
+            go.Click += delegate
+            {
+                if (!Options.Any) return;
+                if (Options.RemoveAll && MsgDialog.YesNo(this, "כל המילונים המותאמים אישית יימחקו מוורד - גם שלכם ושל תוכנות אחרות. "
+                                                             + "יישאר רק המילון המובנה של וורד. לפני המחיקה נשמר עותק גיבוי של הכול.\r\n\r\nלהמשיך?",
+                                                             "מחיקת כל המילונים המותאמים אישית") != DialogResult.Yes) return;
+                Go = true; Close();
+            };
+            cancel.Click += delegate { Close(); };
+            strip.Controls.AddRange(new Control[] { go, cancel });
+            Controls.AddRange(new Control[] { head, lead, rOurs, rPersonal, rList, rRepeat, rAll, strip });
+            ClientSize = Dpi.Sz(620, 622);
+            ActiveControl = go;
+            Sync();
+        }
+
+        OptionRow Row(int y, string title, string desc, bool on)
+        {
+            OptionRow r = new OptionRow { Bounds = Dpi.R(28, y, 564, 80), Title = title, Desc = desc, CheckStyle = true, CountRoom = false, Highlight = false, Selected = on };
+            r.AccessibleName = title; r.AccessibleDescription = desc;
+            r.Chosen += delegate { r.Selected = !r.Selected; Sync(); };
+            return r;
+        }
+
+        void Sync()
+        {
+            Options.RemoveOurs = rOurs.Selected; Options.CleanPersonal = rPersonal.Selected; Options.RepairList = rList.Selected;
+            Options.RestoreRepeated = rRepeat.Selected; Options.RemoveAll = rAll.Selected;
+            go.Enabled = Options.Any;
+        }
+
+        protected override bool ProcessDialogKey(Keys keyData)
+        {
+            if (keyData == Keys.Escape) { Close(); return true; }
+            return base.ProcessDialogKey(keyData);
+        }
+    }
+
     // ------------------------------------------------------------------------------------------ main window
     class MainForm : Form
     {
-        Header header; StatusLabel chip; TextBlock secTitle, stage, status, footer; LowerPanel lower;
+        Header header; StatusLabel chip; TextBlock secTitle, stage, footer; InfoBar status;
         OptionRow cardBasic, cardExt, cardComp;
-        FlatBtn btnInstall, btnRemove, btnManual, btnWords, btnRepeat, btnAdvanced;
+        FlatBtn btnInstall, btnRemove;
+        IconBtn btnManual, btnWords, btnRepeat, btnAdvanced;
+        ToolTip tips;
         ProgressLine prog;
         bool busy;
         bool asking;   // the "Word is open" window (or the short wait after it) is on: a second click must not start anything
         InstalledInfo lastInfo;   // what the last look at this computer found (used for the line "what will be installed")
 
-        public const string Title = "המילון התורני 3.0";
+        public const string Title = "המילון התורני 3.1";
 
         // The window icon, taken from the icon file inside the program WITH ALL ITS SIZES, so that Windows can pick the sharp one for the title bar,
         // the taskbar and Alt+Tab. (Icon.ExtractAssociatedIcon gives one size only, which then has to be shrunk and looks grainy.)
@@ -541,36 +1122,41 @@ namespace OtzariaDict
         {
             Text = Title;
             AutoScaleMode = AutoScaleMode.None;   // every size is scaled by Dpi (see above), never by Windows Forms itself
+            // 3.1 (the user): the window can be made bigger from every side, and maximized to the whole screen; not smaller than its design
+            FormBorderStyle = FormBorderStyle.Sizable;
+            MaximizeBox = true;
             ClientSize = Dpi.Sz(720, Dpi.WindowHeight);
-            FormBorderStyle = FormBorderStyle.FixedSingle;
-            MaximizeBox = false;
+            MinimumSize = Size;
             if (Dpi.Forced) { StartPosition = FormStartPosition.Manual; Location = new Point(0, 0); }   // the developer's screenshots (--dpi): top left corner
             else StartPosition = FormStartPosition.CenterScreen;
-            BackColor = Theme.Surface;
+            BackColor = Theme.Window;
             Font = Theme.F(14, false);
             DoubleBuffered = true;
             Icon = AppIcon();
 
-            header = new Header { Bounds = Dpi.R(0, 0, 720, 80) };
-            secTitle = new TextBlock { Bounds = Dpi.R(440, 104, 240, 28), Font = Theme.F(17, true), Color = Theme.Text, VCenter = true, Wrap = false, Text = "בחרו איזה מילון להתקין" };
-            chip = new StatusLabel { Bounds = Dpi.R(40, 106, 390, 24) };
+            // 3.1 (the owner's choice, design B): the light grey window with white cards that have no border and no shadow, round buttons
+            // and four white tiles. Top: the name (right) and the state of this computer as a white pill (left). (Places: LayoutAll.)
+            header = new Header();
+            chip = new StatusLabel();
+            header.Controls.Add(chip);
+            secTitle = new TextBlock { Font = Theme.F(15, true), Color = Theme.Text, VCenter = true, Wrap = false, Text = "בחרו מילון" };
 
-            // the list: three rows, one under the other (77 + 77 + 78 = 232 design units; the frame lines are part of the rows)
+            // the choice: three cards, one under the other, 10 apart
             cardBasic = new OptionRow
             {
-                Bounds = Dpi.R(40, 142, 640, 77), Pos = RowPos.First, Title = "בסיסי", Selected = true,
+                Title = "בסיסי", Selected = true,
                 Desc = "מילים מהתנ״ך, מהמשנה, מהתלמוד הבבלי ומהתלמוד הירושלמי, וכל ראשי התיבות של 2-3 אותיות (כמו רש\"י, חז\"ל).",
                 Count = CountText(false, false)
             };
             cardExt = new OptionRow
             {
-                Bounds = Dpi.R(40, 219, 640, 77), Pos = RowPos.Middle, Title = "מורחב",
-                Desc = "כולל את הבסיסי, ובנוסף מילים משאר הספרים: ראשונים, אחרונים, הלכה, מדרש ועוד, כולל ראשי התיבות שמופיעים בספרים.",
+                Title = "מורחב",
+                Desc = "כולל את הבסיסי, ובנוסף מילים משאר הספרים: ראשונים, אחרונים, הלכה, מדרש ועוד, וראשי התיבות שמופיעים בהם.",
                 Count = CountText(true, false)
             };
             cardComp = new OptionRow
             {
-                Bounds = Dpi.R(40, 296, 640, 78), Pos = RowPos.Last, Title = "חיבור תורני", CheckStyle = true,
+                Title = "חיבור תורני", CheckStyle = true,
                 Desc = "תוספת לבחירה: מילים בעברית עם אותיות חיבור כמו בארמית (דהעניין, ודלא, כדמצוה...), מילים שאינן במילון עצמו.",
                 Count = ""   // filled in by UpdateSummary: how many words it adds depends on the edition chosen above it
             };
@@ -579,39 +1165,81 @@ namespace OtzariaDict
             cardExt.Chosen += delegate { if (!busy && !asking) { cardExt.Selected = true; cardBasic.Selected = false; UpdateSummary(); } };
             cardComp.Chosen += delegate { if (!busy && !asking) { cardComp.Selected = !cardComp.Selected; UpdateSummary(); } };
 
-            btnRemove = new FlatBtn { Bounds = Dpi.R(40, 392, 288, 46), Text = "הסר מוורד", Style = BtnStyle.Outlined };
-            btnInstall = new FlatBtn { Bounds = Dpi.R(344, 392, 336, 46), Text = "התקן", Style = BtnStyle.Filled };
+            btnRemove = new FlatBtn { Text = "הסר מוורד", Style = BtnStyle.Secondary };
+            btnInstall = new FlatBtn { Text = "התקן", Style = BtnStyle.Filled };
             btnInstall.Click += delegate { StartInstall(); };
             btnRemove.Click += delegate { StartRemove(); };
 
-            prog = new ProgressLine { Bounds = Dpi.R(40, 446, 640, 4) };
+            prog = new ProgressLine();
             // the line under the progress bar: while the program works it shows what it is doing (stage); when it is done, the result (status).
             // They take the same place, and only one of them is visible at a time (SetStage).
-            stage = new TextBlock { Bounds = Dpi.R(40, 460, 640, 22), Font = Theme.F(14, false), Color = Theme.TextSoft, Text = "", Visible = false };
-            status = new TextBlock { Bounds = Dpi.R(40, 460, 640, 60), Font = Theme.F(14, false), Color = Theme.Text, Text = "" };
+            stage = new TextBlock { Font = Theme.F(14, false), Color = Theme.TextSoft, Text = "", Visible = false };
+            status = new InfoBar();
+            prog.Visible = false;   // the progress line is shown only while an action runs; its result is shown in the bar under it
 
-            lower = new LowerPanel { Bounds = Dpi.R(0, 524, 720, 150) };
-            // the manual route is a real, clearly visible button
-            btnManual = new FlatBtn { Bounds = Dpi.R(40, 16, 640, 40), Text = "התקנה ידנית (אם ההתקנה האוטומטית לא עובדת)", Style = BtnStyle.Tonal };
-            btnManual.Click += delegate { StartManual(); };
-
-            // the second row: the person's own changes to the dictionary (3.0.0.9), repeated words, advanced removal
-            btnWords = new FlatBtn { Bounds = Dpi.R(475, 68, 205, 38), Text = "עריכת מילים", Style = BtnStyle.Tonal };
+            // the tools: four white tiles - the person's own words (3.0.0.9), the manual route, repeated words, advanced removal
+            btnWords = new IconBtn { Text = "עריכת מילים", Icon = Glyph.Pencil };
+            btnManual = new IconBtn { Text = "התקנה ידנית", Icon = Glyph.Folder };
+            btnRepeat = new IconBtn { Text = "מילים כפולות", Icon = Glyph.Double };
+            btnAdvanced = new IconBtn { Text = "הסרה מתקדמת", Icon = Glyph.Trash };
             btnWords.Click += delegate { StartWords(); };
-            btnRepeat = new FlatBtn { Bounds = Dpi.R(257, 68, 206, 38), Text = "הסר שגיאות ממילים כפולות", Style = BtnStyle.Outlined, Light = true };
+            btnManual.Click += delegate { StartManual(); };
             btnRepeat.Click += delegate { StartRepeated(); };
-            btnAdvanced = new FlatBtn { Bounds = Dpi.R(40, 68, 205, 38), Text = "הסרה מתקדמת", Style = BtnStyle.Outlined, Light = true };
             btnAdvanced.Click += delegate { StartAdvanced(); };
+            tips = new ToolTip();
+            tips.SetToolTip(btnWords, "הוספה, תיקון והסרה של מילים במילון, ושליחת הצעה לבעל המילון");
+            tips.SetToolTip(btnManual, "אם ההתקנה האוטומטית לא עובדת: הקובץ נשמר, ומוסיפים אותו בוורד בעצמכם");
+            tips.SetToolTip(btnAdvanced, "הסרה עם אפשרויות: גם מהמילון האישי של וורד, תיקון רשימת המילונים של וורד, החזרת סימון מילים כפולות ועוד");
 
             string wv = Core.WordVersion();
-            footer = new TextBlock { Bounds = Dpi.R(40, 120, 640, 18), Font = Theme.F(13, false), Color = Theme.TextQuiet, Center = true, Wrap = false,
-                Text = "גרסת התוכנה " + Core.AppVersion + "   ·   וורד שזוהה במחשב: " + (wv ?? "לא זוהה") };
+            footer = new TextBlock { Font = Theme.F(12.5f, false), Color = Theme.TextQuiet, Center = true, Wrap = false,
+                Text = "גרסה " + Core.AppVersion + "   ·   וורד שזוהה במחשב: " + (wv ?? "לא זוהה") };
 
-            lower.Controls.AddRange(new Control[] { btnManual, btnWords, btnRepeat, btnAdvanced, footer });
             // the order of the Tab key follows this order: right to left, so "install" comes before "remove"
-            Controls.AddRange(new Control[] { header, secTitle, chip, cardBasic, cardExt, cardComp, btnInstall, btnRemove, prog, stage, status, lower });
+            Controls.AddRange(new Control[] { header, secTitle, cardBasic, cardExt, cardComp, btnInstall, btnRemove, prog, stage, status,
+                                              btnWords, btnManual, btnRepeat, btnAdvanced, footer });
+            cardBasic.AccessibleRole = AccessibleRole.RadioButton; cardExt.AccessibleRole = AccessibleRole.RadioButton;
+            LayoutAll();
             RefreshState(true);
         }
+
+        // 3.1: the place of everything for the window's size. The design is 720 x WindowHeight (design units, from top to bottom: the
+        // name 22-70, "בחרו מילון" 88, the cards 120 / 220 / 320 (90 high), the buttons 426 (54), the result 494 (58), the tools 566 (74),
+        // the footer 654). A bigger window keeps the content as one column in the middle (at most 880 wide, the cards and the buttons as
+        // wide as the column) and the whole block in the middle of the height.
+        void LayoutAll()
+        {
+            if (footer == null) return;   // (a resize while the window is being built)
+            Size cs = ClientSize;
+            int colW = Math.Min(Math.Max(Dpi.S(652), cs.Width - Dpi.S(68)), Dpi.S(880));
+            int x = Math.Max(0, (cs.Width - colW) / 2);
+            int dy = Math.Max(0, (cs.Height - Dpi.S(Dpi.WindowHeight)) / 2);
+            header.Bounds = new Rectangle(0, dy, cs.Width, Dpi.S(80));
+            header.ContentLeft = x; header.ContentRight = x + colW;
+            chip.Bounds = new Rectangle(x, Dpi.S(31), Dpi.S(300), Dpi.S(30));   // (inside the header)
+            secTitle.Bounds = new Rectangle(x + colW - Dpi.S(4) - Dpi.S(248), dy + Dpi.S(88), Dpi.S(248), Dpi.S(22));
+            cardBasic.Bounds = new Rectangle(x, dy + Dpi.S(120), colW, Dpi.S(90));
+            cardExt.Bounds = new Rectangle(x, dy + Dpi.S(220), colW, Dpi.S(90));
+            cardComp.Bounds = new Rectangle(x, dy + Dpi.S(320), colW, Dpi.S(90));
+            int sw = Dpi.S(214), gap = Dpi.S(12);
+            btnRemove.Bounds = new Rectangle(x, dy + Dpi.S(426), sw, Dpi.S(54));
+            btnInstall.Bounds = new Rectangle(x + sw + gap, dy + Dpi.S(426), colW - sw - gap, Dpi.S(54));
+            prog.Bounds = new Rectangle(x, dy + Dpi.S(500), colW, Dpi.S(6));
+            stage.Bounds = new Rectangle(x, dy + Dpi.S(514), colW, Dpi.S(22));
+            status.Bounds = new Rectangle(x, dy + Dpi.S(494), colW, Dpi.S(58));
+            // the four tiles, right to left, 10 apart; the last one takes the pixels that are left over
+            int tg = Dpi.S(10), tw = (colW - 3 * tg) / 4;
+            IconBtn[] row = { btnWords, btnManual, btnRepeat, btnAdvanced };
+            for (int i = 0; i < row.Length; i++)
+            {
+                int right = x + colW - i * (tw + tg);
+                row[i].Bounds = new Rectangle(i == row.Length - 1 ? x : right - tw, dy + Dpi.S(566), i == row.Length - 1 ? right - x : tw, Dpi.S(74));
+            }
+            footer.Bounds = new Rectangle(x, dy + Dpi.S(654), colW, Dpi.S(18));
+            header.Invalidate();
+        }
+
+        protected override void OnResize(EventArgs e) { base.OnResize(e); LayoutAll(); }
 
         // shows what the program is doing (stage), in the place where the result of the last action is shown; "" = back to the result
         void SetStage(string s)
@@ -625,9 +1253,11 @@ namespace OtzariaDict
         public void Preview()
         {
             prog.Value = 100; SetStage("");
-            status.Text = "המילון הבסיסי (" + Core.EditionCount(false, false).ToString("N0") + " מילים) נוסף לוורד. עכשיו פתחו את וורד והקלידו מילה תורנית כדי לבדוק.";
+            Result r = new Result();
+            Installer.Describe(r, "המורחב + חיבור תורני", Core.EditionCount(true, true).ToString("N0"), null, 1);
+            status.Ok = r.Ok; status.Title = r.Title; status.Text = Headline(r.Text);
             cardExt.Selected = true; cardBasic.Selected = false; cardComp.Selected = true;
-            chip.Text = "מותקן: מורחב + חיבור תורני · גרסה " + Core.AppVersion; chip.Kind = LabelKind.Ok;
+            chip.Text = "מותקן: מורחב + חיבור תורני · " + Core.AppVersion; chip.Kind = LabelKind.Ok;
             UpdateSummary();
         }
 
@@ -642,7 +1272,7 @@ namespace OtzariaDict
             {
                 e.Cancel = true;
                 if (closeWhenDone) return;
-                if (Ask("הפעולה עדיין רצה.\r\n\r\nאם תסגרו עכשיו, החלון ייסגר והפעולה תסתיים ברקע (לכל היותר שתי דקות).\r\n\r\nלסגור?", "הפעולה עדיין רצה") != DialogResult.Yes) return;
+                if (Ask("אם תסגרו עכשיו, החלון ייסגר והפעולה תסתיים ברקע (לכל היותר שתי דקות).\r\n\r\nלסגור?", "הפעולה עדיין רצה") != DialogResult.Yes) return;
                 if (!busy) { e.Cancel = false; base.OnFormClosing(e); return; }   // the action ended while the question was open: close now
                 closeWhenDone = true;
                 Hide();
@@ -696,14 +1326,15 @@ namespace OtzariaDict
             else
             {
                 string name = (info.Edition == 2 ? "מורחב" : info.Edition == 1 ? "בסיסי" : "חיבור תורני בלבד") + (info.Edition > 0 && info.Compose ? " + חיבור תורני" : "");
+                // short, so that it fits in the pill with Windows' fonts too (3.1 review): the installed version, or "an update is available"
                 string ver;
                 bool current = false;
-                if (info.Version == null) ver = "גרסה ישנה - מומלץ לעדכן";
+                if (info.Version == null) ver = "יש עדכון";
                 else
                 {
                     int cmp = Core.CompareToCurrent(info.Version);
                     current = cmp == 0 || cmp == 1;
-                    ver = cmp == 0 ? "גרסה " + info.Version : cmp == -1 ? "גרסה " + info.Version + " - אפשר לעדכן" : "גרסה " + info.Version;
+                    ver = cmp == -1 ? "יש עדכון" : info.Version;
                 }
                 chip.Text = "מותקן: " + name + " · " + ver;
                 chip.Kind = current ? LabelKind.Ok : LabelKind.Warn;
@@ -714,7 +1345,10 @@ namespace OtzariaDict
                 if (info.Edition == 2) { cardExt.Selected = true; cardBasic.Selected = false; }
                 if (info.Compose) cardComp.Selected = true;
             }
-            btnRepeat.Text = Stamp.ReadRepeatOff() ? "החזר סימון מילים כפולות" : "הסר שגיאות ממילים כפולות";
+            bool repeatOff = Stamp.ReadRepeatOff();
+            btnRepeat.Text = repeatOff ? "החזר סימון כפולות" : "מילים כפולות";   // the button says which way it works now (as in 3.0)
+            if (tips != null) tips.SetToolTip(btnRepeat, repeatOff ? "וורד לא מסמן עכשיו מילים כפולות. לחיצה מחזירה את הסימון."
+                                                                   : "שוורד יפסיק לסמן כשגיאה מילה שחוזרת פעמיים ברצף (\"לא לא\")");
             UpdateSummary();
         }
 
@@ -738,23 +1372,69 @@ namespace OtzariaDict
 
         DialogResult Ask(string text, string title)
         {
-            return MessageBox.Show(this, text, title, MessageBoxButtons.YesNo, MessageBoxIcon.Warning,
-                MessageBoxDefaultButton.Button2, MessageBoxOptions.RtlReading | MessageBoxOptions.RightAlign);
+            return MsgDialog.YesNo(this, text, title);
         }
 
+        // the result of an action: in a message window, and its title and first sentence stay in the bar of the main window
         void Say(Result r)
         {
-            status.Color = r.Ok ? Theme.Text : Theme.Error;
-            status.Text = r.Text.Replace("\r\n\r\n", "  ").Replace("\r\n", " ");
-            MessageBox.Show(this, r.Text, r.Title, MessageBoxButtons.OK, r.Ok ? MessageBoxIcon.Information : MessageBoxIcon.Warning,
-                MessageBoxDefaultButton.Button1, MessageBoxOptions.RtlReading | MessageBoxOptions.RightAlign);
+            status.Ok = r.Ok;
+            status.Title = r.Title;
+            status.Text = Headline(r.Text);
+            prog.Visible = false;
+            MsgDialog.Tell(this, r.Text, r.Title, r.Ok ? MsgKind.Ok : MsgKind.Error);
+        }
+
+        // the first paragraph of a text, in one line
+        internal static string Headline(string text)
+        {
+            if (string.IsNullOrEmpty(text)) return "";
+            int cut = text.IndexOf("\r\n\r\n", StringComparison.Ordinal);
+            return (cut >= 0 ? text.Substring(0, cut) : text).Replace("\r\n", " ").Trim();
+        }
+
+        // for the developer: the message windows with real texts (--preview-msg done | manual | ask | fail | long)
+        public static void PreviewMessage(string which)
+        {
+            Result r = new Result();
+            if (which == "ask")
+            {
+                MsgDialog.YesNo(null, "לא רק את המילון התורני הזה, אלא גם מילונים ומילים שהוספתם בעצמכם (\"הוסף למילון\") או שנוספו על ידי תוכנות אחרות.\r\n\r\n"
+                                      + "יישאר רק המילון המובנה של וורד. לפני המחיקה נשמר עותק גיבוי של הכול.\r\n\r\nלהמשיך?", "ההסרה המתקדמת מוחקת את כל המילונים המותאמים אישית");
+                return;
+            }
+            if (which == "manual")
+            {
+                r.Ok = true; r.Title = "התקנה ידנית";
+                r.Text = "הקבצים נשמרו בתיקייה שנפתחה עכשיו:\r\nC:\\Users\\User\\AppData\\Roaming\\Microsoft\\UProof\r\n\r\n"
+                       + "עכשיו בוורד:\r\n1. קובץ ← אפשרויות ← הגהה\r\n2. לחצו על \"מילונים מותאמים אישית…\"\r\n3. לחצו \"הוספה…\" ובחרו את הקובץ:\r\n   Milon_Torani.dic\r\n"
+                       + "4. אישור, ואם צריך לסגור ולפתוח את וורד מחדש.";
+            }
+            else if (which == "fail")
+            {
+                r.Ok = false; r.Title = "צריך להשלים ידנית";
+                r.Text = "קובץ המילון נשמר, אבל לא הצלחתי לרשום אותו בוורד אוטומטית.\r\n\r\nלחצו על \"התקנה ידנית\" ופעלו לפי ההוראות (לוקח חצי דקה).\r\n\r\n"
+                       + "פרטי השגיאה: Error HRESULT E_FAIL has been returned from a call to a COM component.";
+            }
+            else if (which == "long")
+            {
+                r.Ok = false; r.Title = "המילון הותקן, אבל וורד לא מזהה את כל המילים";
+                System.Text.StringBuilder t = new System.Text.StringBuilder("המילון הבסיסי (69,498 מילים, בקובץ אחד) נוסף לוורד.\r\n\r\n");
+                for (int i = 1; i <= 40; i++) t.Append("שורה " + i + " של טקסט ארוך מאוד, כדי לראות שהחלון לא יוצא מהמסך ושהטקסט נגלל.\r\n");
+                r.Text = t.ToString();
+            }
+            else
+                Installer.Describe(r, "המורחב + חיבור תורני", Core.EditionCount(true, true).ToString("N0"),
+                    "בדיקה אוטומטית בוורד חדש שנפתח לבדיקה: כל 16 מילות הבדיקה מזוהות ✓\r\nמילונים בוורד: CUSTOM.DIC, Milon_Torani.dic, RoamingCustom.dic", 1);
+            MsgDialog.Tell(null, r.Text, r.Title, r.Ok ? MsgKind.Ok : MsgKind.Error);
         }
 
         void Work(Func<Result> job)
         {
             if (busy) return;
             SetBusy(true);
-            status.Text = "";
+            status.Title = ""; status.Text = "";
+            prog.Visible = true;
             prog.Value = 2; SetStage("מתחיל…");
             Thread t = new Thread(delegate ()
             {
@@ -878,7 +1558,7 @@ namespace OtzariaDict
             if (busy || asking) return;
             if (Stamp.ReadRepeatOff())
             {
-                if (Ask("להחזיר את סימון המילים הכפולות בוורד?\r\n\r\nוורד יחזור לסמן כשגיאה מילים שחוזרות פעמיים ברצף.", "החזרת סימון מילים כפולות") != DialogResult.Yes) return;
+                if (Ask("וורד יחזור לסמן כשגיאה מילים שחוזרות פעמיים ברצף.", "להחזיר את סימון המילים הכפולות בוורד?") != DialogResult.Yes) return;
                 Work(delegate { return Installer.SetRepeatedWords(true); });
                 return;
             }
@@ -891,18 +1571,19 @@ namespace OtzariaDict
             Work(delegate { return Installer.SetRepeatedWords(false); });
         }
 
-        // remove every custom dictionary from Word, whoever added it
+        // 3.1: the advanced removal - the person chooses what it does (AdvancedDialog)
         void StartAdvanced()
         {
             if (busy || asking) return;
-            string warn ="זהירות: ההסרה המתקדמת מוחקת מוורד את כל המילונים המותאמים אישית.\r\n\r\n"
-                        + "לא רק את המילון התורני הזה, אלא גם מילונים ומילים שהוספתם בעצמכם (\"הוסף למילון\") או שנוספו על ידי תוכנות אחרות.\r\n\r\n"
-                        + "יישאר רק המילון המובנה של וורד.\r\n\r\n"
-                        + "לפני המחיקה נשמר עותק גיבוי של הכול.\r\n\r\n"
-                        + "להמשיך?";
-            if (Ask(warn, "הסרה מתקדמת") != DialogResult.Yes) return;
-            if (!WordIsClosedOrIgnored(false)) return;   // asked only after the person agreed to the removal itself
-            Work(delegate { return Installer.RemoveAdvanced(true); });
+            AdvancedOptions o;
+            using (AdvancedDialog d = new AdvancedDialog(Stamp.ReadRepeatOff()))
+            {
+                d.ShowDialog(this);
+                if (!d.Go) return;
+                o = d.Options;
+            }
+            if (!WordIsClosedOrIgnored(false)) return;   // asked only after the person chose what to do
+            Work(delegate { return Installer.RemoveAdvanced(true, o, delegate (int p, string what) { UI(delegate { prog.Value = p; SetStage(what); }); }); });
         }
 
         void StartManual()
@@ -952,8 +1633,27 @@ namespace OtzariaDict
             {
                 Application.EnableVisualStyles();
                 Application.SetCompatibleTextRenderingDefault(false);
-                if (args[0] == "--preview-words") using (WordsForm f = new WordsForm(true, false, true, true)) { f.Shown += delegate { f.Demo(); }; f.ShowDialog(); }
+                // "--preview-words <text>": the list found by that search, with the sources (no row being edited)
+                string q = args.Length >= 2 && !args[1].StartsWith("--", StringComparison.Ordinal) ? args[1] : null;
+                if (args[0] == "--preview-words")
+                    using (WordsForm f = new WordsForm(true, q != null, true, true)) { f.Shown += delegate { if (q != null) f.DemoSearch(q); else f.Demo(); }; f.ShowDialog(); }
                 else using (SuggestDialog d = new SuggestDialog(WordsForm.DemoChanges(), "מורחב")) d.ShowDialog();
+                return 0;
+            }
+
+            if (args.Length >= 1 && args[0] == "--preview-advanced")   // for the developer: the choices of the advanced removal
+            {
+                Application.EnableVisualStyles();
+                Application.SetCompatibleTextRenderingDefault(false);
+                using (AdvancedDialog d = new AdvancedDialog(true)) d.ShowDialog();
+                return 0;
+            }
+
+            if (args.Length >= 1 && args[0] == "--preview-msg")   // for the developer: the message windows (done | manual | ask | fail | long)
+            {
+                Application.EnableVisualStyles();
+                Application.SetCompatibleTextRenderingDefault(false);
+                MainForm.PreviewMessage(args.Length >= 2 && !args[1].StartsWith("--", StringComparison.Ordinal) ? args[1] : "done");
                 return 0;
             }
 
@@ -992,7 +1692,20 @@ namespace OtzariaDict
                 Application.SetCompatibleTextRenderingDefault(false);
                 Application.ThreadException += delegate (object s, ThreadExceptionEventArgs e) { Fatal(e.Exception); };
                 AppDomain.CurrentDomain.UnhandledException += delegate (object s, UnhandledExceptionEventArgs e) { Fatal(e.ExceptionObject as Exception); };
-                try { MainForm mf = new MainForm(); if (args.Length >= 1 && args[0] == "--preview") mf.Preview(); Application.Run(mf); }
+                try
+                {
+                    MainForm mf = new MainForm();
+                    if (args.Length >= 1 && args[0] == "--preview") mf.Preview();
+                    // for the developer: the window at another size ("--size 1300x900"), to see the layout of a bigger window
+                    int si = Array.IndexOf(args, "--size");
+                    if (si >= 0 && si + 1 < args.Length)
+                    {
+                        string[] wh = args[si + 1].Split('x');
+                        int w, h;
+                        if (wh.Length == 2 && int.TryParse(wh[0], out w) && int.TryParse(wh[1], out h)) mf.ClientSize = new Size(w, h);
+                    }
+                    Application.Run(mf);
+                }
                 catch (Exception ex) { Fatal(ex); }
             }
             finally
@@ -1087,6 +1800,7 @@ namespace OtzariaDict
             public List<FakeDict> Items = new List<FakeDict>();
             public FakeDict Active;      // the default dictionary, where Word puts the words the person adds
             public bool FailAdd;         // true = Word refuses to add a dictionary
+            public Func<bool> FailAddWhen;   // Word refuses while this says so (3.0.0.10: its own list in the registry is full)
             public int Count { get { return Items.Count; } }
             public FakeDict Item(int i) { return Items[i - 1]; }   // Word counts from 1
             // like Word: when none was chosen, the first dictionary of the list is the default
@@ -1097,7 +1811,7 @@ namespace OtzariaDict
             }
             public FakeDict Add(string path)
             {
-                if (FailAdd) throw new InvalidOperationException("simulated: Word could not add the dictionary");
+                if (FailAdd || (FailAddWhen != null && FailAddWhen())) throw new InvalidOperationException("simulated: Word could not add the dictionary");
                 App.Added.Add(path);
                 FakeDict d = new FakeDict(this, System.IO.Path.GetFileName(path), System.IO.Path.GetDirectoryName(path));
                 Items.Add(d);
@@ -1118,6 +1832,8 @@ namespace OtzariaDict
             public string AtQuit;
             public FakeApp() { Dicts = new FakeDictList(); Dicts.App = this; }
             public FakeDictList CustomDictionaries { get { return Dicts; } }
+            public FakeOptions Options { get { return options; } }
+            readonly FakeOptions options = new FakeOptions();
             public FakeDocs Documents { get { DocumentsTouched++; FakeDocs d = new FakeDocs(); d.App = this; return d; } }
             public void Quit(params object[] args) { Quitted = true; if (Probe != null) AtQuit = Probe(); }
             public bool Marks(string word)
@@ -1127,6 +1843,8 @@ namespace OtzariaDict
                 return !(InEffect && Known.Contains(word));
             }
         }
+
+        public class FakeOptions { bool repeat = true; public bool RepeatWord { get { return repeat; } set { repeat = value; } } }
 
         public class FakeDocs { public FakeApp App; public FakeDoc Add(params object[] args) { FakeDoc d = new FakeDoc(); d.App = App; return d; } }
         public class FakeDoc
@@ -1218,7 +1936,7 @@ namespace OtzariaDict
             info = Core.DetectInstalled();
             Check(info.Edition == 1 && !info.Compose, "detected: basic, no composition");
             int nb = WordsIn(main, out bom, out first);
-            Check(nb == Core.BuildWords(false, false).Count && nb < 70000, "basic file has " + nb + " words");
+            Check(nb == Core.BuildWords(false, false).Count && nb < Core.BuildWords(true, false).Count, "basic file has " + nb + " words (fewer than the extended one)");
 
             Console.WriteLine("-- advanced removal (foreign dictionaries too)");
             Core.WriteDic(Path.Combine(dir, "CUSTOM.DIC"), new List<string> { "מילהפרטית", "עודאחת" });
@@ -1353,6 +2071,10 @@ namespace OtzariaDict
 
             SelfTestReviewFixes(dir);
             SelfTestWordEditing(dir);
+            SelfTestRemoval31(dir);
+            SelfTestRemoval31b(dir);
+            SelfTestRetired(dir);
+            SelfTestSources();
 
             Console.WriteLine(fails == 0 ? "SELFTEST PASSED" : "SELFTEST FAILED (" + fails + ")");
             return fails;
@@ -1554,9 +2276,129 @@ namespace OtzariaDict
             try { f2 = InstallWithFakeWord(w2, true, null); } finally { Core.FailWriteHook = null; }
             Check(!f2.Ok && w2.Deleted == 0 && w2.Added.Count == 0, "the folder cannot be written at all: Word was not touched");
 
+            Console.WriteLine("-- 3.0.0.10: Word's own list of dictionaries (registry, one entry per file and account) is full");
+            {
+                string acct = "16_7bd116fa7f21d40b_LiveId";
+                string roamPath = Path.Combine(Path.Combine(dir, "Proofing"), "RoamingCustom.dic");
+                Directory.CreateDirectory(Path.GetDirectoryName(roamPath));
+                Core.WriteDic(roamPath, new List<string> { "מילהשלי" });
+                Action<string[]> setList = delegate (string[] files)
+                {
+                    Microsoft.Win32.Registry.CurrentUser.DeleteSubKeyTree(RegFallback.KeyPath, false);
+                    using (Microsoft.Win32.RegistryKey k = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(RegFallback.KeyPath))
+                    {
+                        k.SetValue("UpdateComplete", 1, Microsoft.Win32.RegistryValueKind.DWord);
+                        for (int i = 0; i < files.Length; i++)
+                        {
+                            string h = (i + 1).ToString(CultureInfo.InvariantCulture) + "_" + acct;
+                            k.SetValue(h, files[i], Microsoft.Win32.RegistryValueKind.String);
+                            k.SetValue(h + "_state", new byte[] { 0, 0, 0, 0 }, Microsoft.Win32.RegistryValueKind.Binary);
+                            k.SetValue(h + "_roamed", new byte[] { 0, 0, 0, 0 }, Microsoft.Win32.RegistryValueKind.Binary);
+                            k.SetValue(h + "_external", new byte[] { 0, 0, 0, 0 }, Microsoft.Win32.RegistryValueKind.Binary);
+                        }
+                    }
+                };
+                Func<List<string>> wordList = delegate
+                {
+                    List<string> l = new List<string>();
+                    using (Microsoft.Win32.RegistryKey k = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(RegFallback.KeyPath))
+                        foreach (DictEntry e in DictList.Read(k)) if (e.Main != null && e.Identity == acct) l.Add(e.Number + ":" + e.Leaf);
+                    return l;
+                };
+                Func<bool> full = delegate { return wordList().Count >= 10; };
+                int n0; string id0; bool m0;
+                Check(DictList.Parse("4_" + acct, out n0, out id0, out m0) && n0 == 4 && id0 == acct && m0
+                      && DictList.Parse("10_" + acct + "_roamed", out n0, out id0, out m0) && n0 == 10 && !m0
+                      && DictList.Parse("1_state", out n0, out id0, out m0) && id0 == "" && !m0
+                      && !DictList.Parse("UpdateComplete", out n0, out id0, out m0), "the names of Word's list are read");
+
+                // a. as on the user's computer (9-11): files of 3.0.0.1, a WordCheck trial and five size-check files fill the list
+                setList(new string[] { roamPath, "Otzaria_Torah_Basic.dic", "Otzaria_Torah_Acronyms.dic", Core.MainFile, Path.Combine(dir, "wordcheck_trial.dic"),
+                    "Milon_SizeTest_175000.dic", "Milon_SizeTest_200000.dic", "Milon_SizeTest_250000.dic", "Milon_SizeTest_300000.dic", "Milon_SizeTest_400000.dic" });
+                FakeApp fullWord = new FakeApp(); fullWord.Dicts.FailAddWhen = full;
+                FakeApp checkF = new FakeApp(); checkF.InEffect = true; checkF.Known = basicWords;
+                Result fa = InstallWithFakeWord(fullWord, false, checkF);
+                Check(fa.Ok && fullWord.Added.Contains(main), "before Word starts the old entries go, and Word takes the dictionary (" + fa.Title + ")");
+                Check(string.Join(" ", wordList().ToArray()) == "1:RoamingCustom.dic 2:Milon_Torani.dic", "the list: the person's dictionary, ours moved up to 2 (" + string.Join(" ", wordList().ToArray()) + ")");
+                Check(fullWord.Added.Contains(roamPath), "the person's Office dictionary, not in use, is put back into use");
+                // (3.1 review) it is put back before the default dictionary is chosen: it is the default, not a new empty CUSTOM.DIC
+                Check(fullWord.Dicts.ActiveCustomDictionary != null && fullWord.Dicts.ActiveCustomDictionary.Name == "RoamingCustom.dic"
+                      && !fullWord.Added.Exists(delegate (string p) { return string.Equals(Path.GetFileName(p), "CUSTOM.DIC", StringComparison.OrdinalIgnoreCase); }),
+                      "Word's default dictionary is the person's Office dictionary (" + (fullWord.Dicts.ActiveCustomDictionary == null ? "none" : fullWord.Dicts.ActiveCustomDictionary.Name) + ")");
+
+                // b. the list is full of the person's own dictionaries and ours: ours goes too, and a new hidden Word takes the dictionary
+                setList(new string[] { roamPath, "Own1.dic", "Own2.dic", "Own3.dic", "Own4.dic", "Own5.dic", "Own6.dic", "Own7.dic", "Own8.dic", Core.MainFile });
+                FakeApp fullWord2 = new FakeApp(); fullWord2.Dicts.FailAddWhen = full;
+                FakeApp freshF = new FakeApp(); freshF.Dicts.FailAddWhen = full; freshF.InEffect = true; freshF.Known = basicWords;
+                Result fb = InstallWithFakeWord(fullWord2, false, freshF);
+                Check(fb.Ok && freshF.Added.Contains(main) && fb.Text.Contains("מזוהות ✓"), "Word refused, the list was cleaned, a new Word took it (" + fb.Title + ")");
+                List<string> left = wordList();
+                Check(left.Count == 9 && left.Contains("2:Own1.dic") && left.Contains("9:Own8.dic"), "the person's eight dictionaries stay (" + string.Join(" ", left.ToArray()) + ")");
+
+                // c. the person's own Word is open and refuses: our entry is not taken out of the list (that Word would write its old copy
+                //    back). (Whether a Word runs is asked of Windows; here none does, so the old files' entries still go before the start.)
+                setList(new string[] { roamPath, "Otzaria_Torah_Basic.dic", Core.MainFile });
+                FakeApp open = new FakeApp(); open.Dicts.FailAdd = true;
+                InstallWithFakeWord(open, true, null);
+                Check(string.Join(" ", wordList().ToArray()) == "1:RoamingCustom.dic 2:Milon_Torani.dic", "Word was open: our entry stays in the list (" + string.Join(" ", wordList().ToArray()) + ")");
+
+                // d. (3.1 review) the list exactly as on the user's computer, with what is outside the account too: Office's "1_state" and
+                //    "1_external", and "11" = our file (an older version's registry route). The clean must not move "11" to "1", and
+                //    "remove from Word" must not take the person's "1_<account>" (RoamingCustom.dic) or Office's settings with it.
+                string[] nineEleven = { roamPath, "Otzaria_Torah_Basic.dic", "Otzaria_Torah_Acronyms.dic", Core.MainFile, Path.Combine(dir, "wordcheck_trial.dic"),
+                    "Milon_SizeTest_175000.dic", "Milon_SizeTest_200000.dic", "Milon_SizeTest_250000.dic", "Milon_SizeTest_300000.dic", "Milon_SizeTest_400000.dic" };
+                setList(nineEleven);
+                using (Microsoft.Win32.RegistryKey k = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(RegFallback.KeyPath, true))
+                {
+                    k.SetValue("1_state", new byte[] { 1, 0, 0, 0 }, Microsoft.Win32.RegistryValueKind.Binary);
+                    k.SetValue("1_external", new byte[] { 0, 0, 0, 0 }, Microsoft.Win32.RegistryValueKind.Binary);
+                    k.SetValue("11", main, Microsoft.Win32.RegistryValueKind.String);
+                }
+                Func<string, object> val = delegate (string name)
+                {
+                    using (Microsoft.Win32.RegistryKey k = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(RegFallback.KeyPath)) return k == null ? null : k.GetValue(name);
+                };
+                FakeApp fullWord4 = new FakeApp(); fullWord4.Dicts.FailAddWhen = full;
+                FakeApp checkD = new FakeApp(); checkD.InEffect = true; checkD.Known = basicWords;
+                Result fd = InstallWithFakeWord(fullWord4, false, checkD);
+                Check(fd.Ok && val("11") != null && val("1") == null, "the entry without an account is not moved (" + fd.Title + ")");
+                Installer.Remove(false);
+                Check(roamPath.Equals(val("1_" + acct)) && val("1_" + acct + "_state") != null && val("1_" + acct + "_roamed") != null && val("1_" + acct + "_external") != null,
+                      "remove from Word: the person's Office dictionary stays in Word's list, with its settings");
+                Check(val("1_state") != null && val("1_external") != null && val("11") == null, "remove from Word: our old entry goes, Office's own settings stay");
+
+                // e. (3.1 review) a Word still runs (also our own one that is still closing): Word's list is not changed at all - that Word
+                //    would write its old copy back
+                setList(nineEleven);
+                int keepWait = WordCom.CloseWaitMs;
+                WordCom.AnyWordHook = delegate { return true; };
+                WordCom.CloseWaitMs = 300;
+                try
+                {
+                    FakeApp fullWord5 = new FakeApp(); fullWord5.Dicts.FailAddWhen = full;
+                    FakeApp checkE = new FakeApp(); checkE.Dicts.FailAddWhen = full; checkE.InEffect = true; checkE.Known = basicWords;
+                    InstallWithFakeWord(fullWord5, false, checkE);
+                }
+                finally { WordCom.AnyWordHook = null; WordCom.CloseWaitMs = keepWait; }
+                Check(wordList().Count == 10 && wordList().Contains("6:Milon_SizeTest_175000.dic"), "a Word still runs: Word's list was not changed (" + wordList().Count + " entries)");
+
+                // f. (3.1 review) closing up the numbers never overwrites: settings that Office left without a file keep their number
+                setList(new string[] { roamPath, "Otzaria_Torah_Basic.dic", "Own1.dic" });
+                using (Microsoft.Win32.RegistryKey k = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(RegFallback.KeyPath, true))
+                {
+                    k.DeleteValue("2_" + acct, false);                                                  // entry 2: only its settings are left
+                    k.SetValue("4_" + acct, "Otzaria_Torah_Basic.dic", Microsoft.Win32.RegistryValueKind.String);   // a stale file at 4
+                    List<string> doneF = DictList.Clean(k, false);
+                    Check(doneF.Count == 1 && doneF[0].StartsWith("deleted 4"), "only the stale entry goes; nothing moves onto the settings left at 2 (" + string.Join("; ", doneF.ToArray()) + ")");
+                    Check(k.GetValue("3_" + acct) as string == "Own1.dic" && k.GetValue("2_" + acct + "_state") != null, "the person's entry 3 and the settings at 2 are where they were");
+                }
+                Microsoft.Win32.Registry.CurrentUser.DeleteSubKeyTree(RegFallback.KeyPath, false);
+            }
+
             Console.WriteLine("-- 3.0.0.8: Word refuses to add the dictionary: the registry route is checked, not just assumed");
             FakeApp refuseAdd = new FakeApp(); refuseAdd.Dicts.FailAdd = true;
             FakeApp check3 = new FakeApp(); check3.InEffect = true; check3.Known = basicWords;
+            check3.Dicts.FailAdd = true;   // 3.0.0.10: a new hidden Word is asked again after the list is cleaned - this one refuses too
             Result g1 = InstallWithFakeWord(refuseAdd, false, check3);
             Check(RegNumberOf(main) != null, "our file is in Word's registry list");
             Check(g1.Ok && g1.Title == "ההתקנה הושלמה" && g1.Text.Contains("מזוהות ✓"), "a new Word knows the words: done (" + g1.Title + ")");
@@ -1677,6 +2519,292 @@ namespace OtzariaDict
             try { ar3 = Installer.RemoveAdvanced(true); } finally { WordCom.OpenHook = null; }
             Check(!ar3.Ok && !ar3.Text.Contains("לא נמצאו") && ar3.Text.Contains("Backup_") && ar3.Text.Contains("RoamingCustom.dic"), "Word refused everything: the answer says so and names the backup");
             Directory.Delete(elsewhere, true);
+        }
+
+        // 3.1 (the user, 9-11): the removal brings back the marking of repeated words; the advanced removal is a set of choices
+        // 3.1 dropped words of 3.0 that the libraries do not have (at least 3 times): an update must not keep them as the person's words
+        static void SelfTestRetired(string dir)
+        {
+            Console.WriteLine("-- 3.1: the words that left the dictionary");
+            string[] gone = Core.Retired;
+            HashSet<string> ours = new HashSet<string>(Core.BuildWords(true, true), StringComparer.Ordinal);
+            int stillIn = 0;
+            foreach (string w in gone) if (ours.Contains(w) && !w.Contains("\"")) stillIn++;   // (an abbreviation of 2-3 letters is made anyway)
+            Check(gone.Length > 10000 && Array.IndexOf(gone, "נחלתתם") >= 0 && !ours.Contains("נחלתתם"),
+                  "the list of words that left is inside the program: " + gone.Length.ToString("N0") + " words (נחלתתם among them)");
+            Check(stillIn < 200, "they are not in the new lists (" + stillIn + " are made anyway as chibur torani forms)");
+            string f = Path.Combine(dir, "retired-test.dic");
+            Core.WriteDic(f, new List<string> { "נחלתתם", "ישמעאחורבן", "מילהשלהאדם" });
+            List<string> theirs = Core.ForeignWords(f);
+            Check(theirs.Count == 1 && theirs[0] == "מילהשלהאדם", "an update keeps only the person's own word, not the words that left");
+            File.Delete(f);
+        }
+
+        // 3.1: where each word appears (the blue titles of the word-editing window)
+        static void SelfTestSources()
+        {
+            Console.WriteLine("-- 3.1: the sources of the words");
+            string text = string.Join("\n", new string[] {
+                "#B\t4", "ברכות\t2\tאוצריא", "בראשית\t0\tאוצריא", "ירושלמי ברכות\t3\tספריא", "משנה ברורה\t-\tדיקטה",
+                "#H\t2", "דף ב עמוד א", "פרק א",
+                "#L\t3", "3", "א", "7",
+                "#W\t2",
+                "אבגד\t12\t0:2:1.1.1.4;2:5:0.0.0.5\t3:4:3.1.2.2\t3",
+                "אבגה\t2\t3:1:2.0.0.1\t3:1:3.1.2.1\t1" }) + "\n";
+            SourceIndex.Use(System.Text.Encoding.UTF8.GetBytes(text));
+            WordSources a = SourceIndex.Find("אבגד"), b = SourceIndex.Find("אבגה");
+            Check(a != null && a.Total == 12 && a.Items.Count == 3 && a.MoreBooks == 2, "a word: its total, its 3 sources and \"2 more books\"");
+            Check(a != null && a.Items[0].Title == "תנ\"ך" && a.Items[0].Core && a.Items[0].Count == 2 && a.Items[0].Places.Count == 1
+                  && a.Items[0].Places[0] == "בראשית, פרק א, פסוק א, מילה 4", "Tanakh: the verse, not a line (" + (a == null ? "" : a.Items[0].Places[0]) + ")");
+            Check(a != null && a.Items[1].Title == "תלמוד בבלי" && a.Items[1].Places[0] == "מסכת ברכות, דף ב עמוד א, שורה 3, מילה 5",
+                  "Bavli: the tractate, the page and side, the line and the word (" + (a == null ? "" : a.Items[1].Places[0]) + ")");
+            Check(a != null && !a.Items[2].Core && a.Items[2].Title == "משנה ברורה" && a.Items[2].Library == "דיקטה" && a.Items[2].Count == 4
+                  && a.Items[2].Places[0] == "משנה ברורה, פרק א, שורה 7, מילה 2", "another book: its name, its library, how often, its first place");
+            Check(b != null && b.Items.Count == 2 && b.Items[0].Title == "תלמוד ירושלמי"
+                  && b.Items[0].Places[0] == "מסכת ברכות, דף ב עמוד א, שורה 3, מילה 1 (ספריא)" && b.MoreBooks == 0,
+                  "Yerushalmi: \"ירושלמי ברכות\" is shown as the tractate, and a copy that is not Otzaria's says whose it is");
+            Check(SourceIndex.Find("אבג") == null && SourceIndex.Find("אבגדה") == null && SourceIndex.Find("") == null && SourceIndex.Find("א") == null && SourceIndex.Find("ת") == null,
+                  "a word that is not there: no sources (also before the first and after the last)");
+
+            // the program's own sources: every word of the lists has its place
+            Stopwatch sw = Stopwatch.StartNew();
+            bool have = SourceIndex.LoadResourceNow();
+            long loadMs = sw.ElapsedMilliseconds;
+            Check(have && SourceIndex.Ready, "the sources are inside the program, and read (" + loadMs + " ms)");
+            if (!have) return;
+            WordSources m = SourceIndex.Find("מיבעי");
+            WordSource bavli = null;
+            if (m != null) foreach (WordSource s in m.Items) if (s.Title == "תלמוד בבלי") bavli = s;
+            // (one copy of the Bavli is counted: about 650 times - the Otzaria and the Sefaria copies added up would be about 1,300)
+            Check(bavli != null && bavli.Count > 500 && bavli.Count < 1000 && bavli.Places.Count > 0 && bavli.Places[0].StartsWith("מסכת ", StringComparison.Ordinal)
+                  && bavli.Places[0].Contains("דף "), "מיבעי: in the Bavli " + (bavli == null ? "?" : bavli.Count.ToString("N0")) + " times (one copy), first at "
+                  + (bavli == null || bavli.Places.Count == 0 ? "?" : bavli.Places[0]));
+            WordSources once = SourceIndex.Find("אאבוד");
+            WordSource ob = null;
+            if (once != null) foreach (WordSource s in once.Items) if (s.Title == "תלמוד בבלי") ob = s;
+            Check(ob != null && ob.Count == 1 && ob.Places.Count == 1, "אאבוד: once in the Bavli, one place (not the same place in two copies)");
+            int missingBasic = 0, missingMore = 0, n = 0;
+            sw = Stopwatch.StartNew();
+            foreach (string w in Core.LoadWords(Core.BasicRes)) { n++; if (SourceIndex.Find(w) == null) missingBasic++; }
+            foreach (string w in Core.LoadWords(Core.MoreRes)) { n++; if (SourceIndex.Find(w) == null) missingMore++; }
+            Check(missingBasic == 0 && missingMore == 0, "every word of the two lists has its sources, read without a fault: " + n.ToString("N0")
+                  + " words, " + sw.ElapsedMilliseconds + " ms (missing: basic " + missingBasic + ", extended " + missingMore + ")");
+        }
+
+        static string NewestBackup(string dir)
+        {
+            string b = null;
+            foreach (string d in Directory.GetDirectories(dir, "Backup_*")) if (b == null || string.CompareOrdinal(d, b) > 0) b = d;
+            return b;
+        }
+
+        // 3.1, after the code review of the removal choices (I1-I3, I5, M1, M3, M12): each check failed on the code before the fix
+        static void SelfTestRemoval31b(string dir)
+        {
+            Console.WriteLine("-- 3.1: the removal choices together (after the code review)");
+            string main = Path.Combine(dir, Core.MainFile), custom = Path.Combine(dir, "CUSTOM.DIC"), own = Path.Combine(dir, "Own.dic");
+            string elsewhere = Path.Combine(dir, "roaming-31b");
+            Directory.CreateDirectory(elsewhere);
+            string roam = Path.Combine(elsewhere, "RoamingCustom.dic");
+            string acct = "16_7bd116fa7f21d40b_LiveId";
+            List<string> all = Core.BuildWords(true, true);
+            string torah1 = all[10];
+            Installer.PersonalFilesHook = null;
+
+            // I1: "delete every custom dictionary" together with the other choices - one backup folder, named in the answer, and the name of a
+            // dictionary that could not be cleared
+            System.Threading.Thread.Sleep(1100);
+            Microsoft.Win32.Registry.CurrentUser.DeleteSubKeyTree(RegFallback.KeyPath, false);
+            Core.WriteDic(own, new List<string> { "מילהשלי" });
+            Core.WriteDic(custom, new List<string> { "מילהאחרת" });
+            AdvancedOptions oa = new AdvancedOptions();
+            oa.RemoveOurs = true; oa.CleanPersonal = true; oa.RepairList = true; oa.RestoreRepeated = false; oa.RemoveAll = true;
+            Core.FailDeleteHook = delegate (string f) { return Path.GetFileName(f) == "Own.dic"; };
+            Core.FailWriteHook = delegate (string f) { return Path.GetFileName(f) == "Own.dic"; };
+            Result rx;
+            try { rx = Installer.RemoveAdvanced(false, oa); } finally { Core.FailDeleteHook = null; Core.FailWriteHook = null; }
+            string bx = NewestBackup(dir);
+            Check(bx != null && File.Exists(Path.Combine(bx, "CUSTOM.DIC")) && File.Exists(Path.Combine(bx, "dictionaries.txt")) && rx.Text.Contains(bx),
+                  "delete all + the other choices: the copies are in one backup folder, and the answer names it");
+            Check(!rx.Ok && rx.Text.Contains("Own.dic"), "delete all: a dictionary that could not be cleared is named in the answer");
+            try { File.Delete(own); } catch (Exception) { }
+
+            // I2: a word that left the dictionary in 3.1 stays in Office's personal dictionary (no version of the program writes there: the
+            // person put it there), and leaves CUSTOM.DIC (version 2.0 wrote its words there); a word of the person that "remove the
+            // dictionary" has just moved from our file to CUSTOM.DIC is not taken out again by the clean
+            System.Threading.Thread.Sleep(1100);
+            InstallWithFakeWord(new FakeApp(), false, new FakeApp());
+            List<string> inMain = Core.ReadDicWords(main);
+            inMain.Add("רש״י");   // added by the person through Word, with the Hebrew gershayim
+            Core.WriteDic(main, inMain);
+            Microsoft.Win32.Registry.CurrentUser.DeleteSubKeyTree(RegFallback.KeyPath, false);
+            using (Microsoft.Win32.RegistryKey k = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(RegFallback.KeyPath)) k.SetValue("1_" + acct, roam);
+            Core.WriteDic(roam, new List<string> { "נחלתתם", "שלוםעליכם", torah1 });
+            Core.WriteDic(custom, new List<string> { "ישמעאחורבן", "מילהשלי" });
+            AdvancedOptions oi = new AdvancedOptions();
+            oi.RemoveOurs = true; oi.CleanPersonal = true; oi.RepairList = false; oi.RestoreRepeated = false; oi.RemoveAll = false;
+            Result ri = Installer.RemoveAdvanced(false, oi);
+            List<string> roamNow = Core.ReadDicWords(roam), customNow = Core.ReadDicWords(custom);
+            Check(roamNow.Contains("נחלתתם") && roamNow.Contains("שלוםעליכם") && !roamNow.Contains(torah1),
+                  "Office's personal dictionary: a Torah word left; a word that left the dictionary in 3.1 stays (the person added it)");
+            Check(!customNow.Contains("ישמעאחורבן") && customNow.Contains("מילהשלי"), "CUSTOM.DIC: the words of version 2.0 that left the dictionary go too");
+            Check(customNow.Contains("רש״י") && ri.Ok, "the person's word moved from our file to CUSTOM.DIC is kept by the clean");
+
+            // I3: the choice "mark repeated words again" does it also when the person switched the marking off in Word itself
+            System.Threading.Thread.Sleep(1100);
+            Stamp.WriteRepeatOff(false);
+            FakeApp w3 = new FakeApp();
+            w3.Options.RepeatWord = false;
+            WordCom.OpenHook = delegate { WordSession s = new WordSession(); s.App = w3; s.Created = true; return s; };
+            AdvancedOptions orp = new AdvancedOptions();
+            orp.RemoveOurs = false; orp.CleanPersonal = false; orp.RepairList = false; orp.RestoreRepeated = true; orp.RemoveAll = false;
+            Result r3;
+            try { r3 = Installer.RemoveAdvanced(true, orp); } finally { WordCom.OpenHook = null; }
+            Check(w3.Options.RepeatWord && r3.Ok && r3.Text.Contains("יסמן שוב"), "the repeated-words choice switches the marking on although this program did not switch it off");
+            InstallWithFakeWord(new FakeApp(), false, new FakeApp());
+            FakeApp w4 = new FakeApp();
+            w4.Options.RepeatWord = false;
+            WordCom.OpenHook = delegate { WordSession s = new WordSession(); s.App = w4; s.Created = true; return s; };
+            orp.RemoveOurs = true;
+            try { r3 = Installer.RemoveAdvanced(true, orp); } finally { WordCom.OpenHook = null; }
+            Check(w4.Options.RepeatWord && r3.Text.Contains("יסמן שוב"), "... also together with \"remove the dictionary\"");
+
+            // I5: Outlook (or another Office program) is open: it writes Word's list and the personal dictionary back when it closes, so they
+            // are not changed, and the answer says why
+            Microsoft.Win32.Registry.CurrentUser.DeleteSubKeyTree(RegFallback.KeyPath, false);
+            using (Microsoft.Win32.RegistryKey k = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(RegFallback.KeyPath))
+            {
+                k.SetValue("1_" + acct, roam);
+                k.SetValue("2_" + acct, "Milon_SizeTest_400000.dic");
+            }
+            Core.WriteDic(roam, new List<string> { "שלוםעליכם", torah1 });
+            AdvancedOptions oo = new AdvancedOptions();
+            oo.RemoveOurs = false; oo.CleanPersonal = true; oo.RepairList = true; oo.RestoreRepeated = false; oo.RemoveAll = false;
+            WordCom.OtherOfficeHook = delegate { return new List<string> { "Outlook" }; };
+            Result ro;
+            try { ro = Installer.RemoveAdvanced(false, oo); } finally { WordCom.OtherOfficeHook = null; }
+            bool entryStays;
+            using (Microsoft.Win32.RegistryKey k = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(RegFallback.KeyPath))
+                entryStays = k.GetValue("2_" + acct) as string == "Milon_SizeTest_400000.dic";
+            Check(!ro.Ok && ro.Text.Contains("Outlook") && Core.ReadDicWords(roam).Contains(torah1) && entryStays,
+                  "Outlook is open: Word's list and the personal dictionary are not changed, and the answer names Outlook");
+
+            // M1 + M12: a personal dictionary that cannot be written - named, no "there were no Torah words", the file as it was; one word: singular
+            System.Threading.Thread.Sleep(1100);
+            Core.FailWriteHook = delegate (string f) { return f == roam; };
+            AdvancedOptions op = new AdvancedOptions();
+            op.RemoveOurs = false; op.CleanPersonal = true; op.RepairList = false; op.RestoreRepeated = false; op.RemoveAll = false;
+            Result rw;
+            try { rw = Installer.RemoveAdvanced(false, op); } finally { Core.FailWriteHook = null; }
+            Check(!rw.Ok && rw.Text.Contains("RoamingCustom.dic") && !rw.Text.Contains("לא היו") && Core.ReadDicWords(roam).Count == 2,
+                  "a personal dictionary that cannot be written: named, not \"there were none\", and left whole");
+            System.Threading.Thread.Sleep(1100);
+            Result r1 = Installer.RemoveAdvanced(false, op);
+            Check(r1.Ok && r1.Text.Contains("מילה אחת"), "one word out: \"מילה אחת\", not \"1 מילים\"");
+
+            // M3: "remove the dictionary" stopped (the person's words in our file could not be kept elsewhere): our entry stays in Word's list
+            InstallWithFakeWord(new FakeApp(), false, new FakeApp());
+            inMain = Core.ReadDicWords(main);
+            inMain.Add("מילהשלהאדםבוורד");
+            Core.WriteDic(main, inMain);
+            Microsoft.Win32.Registry.CurrentUser.DeleteSubKeyTree(RegFallback.KeyPath, false);
+            using (Microsoft.Win32.RegistryKey k = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(RegFallback.KeyPath))
+            {
+                k.SetValue("1_" + acct, main);
+                k.SetValue("2_" + acct, "Milon_SizeTest_400000.dic");
+            }
+            AdvancedOptions om = new AdvancedOptions();
+            om.RemoveOurs = true; om.CleanPersonal = false; om.RepairList = true; om.RestoreRepeated = false; om.RemoveAll = false;
+            Core.FailWriteHook = delegate (string f) { return string.Equals(Path.GetFileName(f), "CUSTOM.DIC", StringComparison.OrdinalIgnoreCase); };
+            Result rm;
+            try { rm = Installer.RemoveAdvanced(false, om); } finally { Core.FailWriteHook = null; }
+            using (Microsoft.Win32.RegistryKey k = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(RegFallback.KeyPath))
+                Check(!rm.Ok && File.Exists(main) && k.GetValue("1_" + acct) as string == main && k.GetValue("2_" + acct) == null,
+                      "the dictionary could not be removed: its entry stays in Word's list (the size-check entry still goes)");
+
+            Microsoft.Win32.Registry.CurrentUser.DeleteSubKeyTree(RegFallback.KeyPath, false);
+            Installer.Remove(false);
+            try { Directory.Delete(elsewhere, true); } catch (Exception) { }
+            foreach (string f in new string[] { custom, custom + ".bak", own }) try { File.Delete(f); } catch (Exception) { }
+        }
+
+        static void SelfTestRemoval31(string dir)
+        {
+            Console.WriteLine("-- 3.1: removal and the choices of the advanced removal");
+            string main = Path.Combine(dir, Core.MainFile);
+
+            // a. "remove from Word" switches the marking of repeated words back on, when this program switched it off
+            InstallWithFakeWord(new FakeApp(), false, new FakeApp());
+            Stamp.WriteRepeatOff(true);
+            FakeApp w = new FakeApp();
+            w.Options.RepeatWord = false;
+            WordCom.OpenHook = delegate { WordSession s = new WordSession(); s.App = w; s.Created = true; return s; };
+            Result r;
+            try { r = Installer.Remove(true); } finally { WordCom.OpenHook = null; }
+            Check(r.Ok && w.Options.RepeatWord && !Stamp.ReadRepeatOff() && r.Text.Contains("מילים כפולות"),
+                  "remove from Word: Word marks repeated words again, and the answer says so");
+            // ... and leaves it alone when the program did not switch it off
+            InstallWithFakeWord(new FakeApp(), false, new FakeApp());
+            FakeApp w2 = new FakeApp();
+            w2.Options.RepeatWord = false;   // switched off by the person, not by this program
+            WordCom.OpenHook = delegate { WordSession s = new WordSession(); s.App = w2; s.Created = true; return s; };
+            try { Installer.Remove(true); } finally { WordCom.OpenHook = null; }
+            Check(!w2.Options.RepeatWord, "remove from Word: a marking the person switched off is left as it is");
+
+            // b. the advanced removal, two choices only: Torah words out of the personal dictionaries, and Word's list repaired
+            string elsewhere = Path.Combine(dir, "roaming-31");
+            Directory.CreateDirectory(elsewhere);
+            string roam = Path.Combine(elsewhere, "RoamingCustom.dic"), custom = Path.Combine(dir, "CUSTOM.DIC");
+            List<string> all = Core.BuildWords(true, true);
+            string torah1 = all[10], torah2 = all[all.Count / 2], torah3 = all[all.Count - 1];
+            Core.WriteDic(roam, new List<string> { "שלוםעליכם", torah1, "משפחתכהן", torah2.Replace('"', '״') });
+            Core.WriteDic(custom, new List<string> { torah3, "מילהשלי" });
+            Microsoft.Win32.Registry.CurrentUser.DeleteSubKeyTree(RegFallback.KeyPath, false);
+            string acct = "16_7bd116fa7f21d40b_LiveId";
+            using (Microsoft.Win32.RegistryKey k = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(RegFallback.KeyPath))
+            {
+                k.SetValue("1_" + acct, roam);
+                k.SetValue("2_" + acct, "Milon_SizeTest_400000.dic");
+                k.SetValue("3_" + acct, "Own.dic");
+            }
+            Installer.PersonalFilesHook = null;
+            InstallWithFakeWord(new FakeApp(), false, new FakeApp());   // (our dictionary is there, and must stay)
+            bool mainBefore = File.Exists(main);
+            Microsoft.Win32.Registry.CurrentUser.DeleteSubKeyTree(RegFallback.KeyPath, false);
+            using (Microsoft.Win32.RegistryKey k = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(RegFallback.KeyPath))
+            {
+                k.SetValue("1_" + acct, roam);
+                k.SetValue("2_" + acct, "Milon_SizeTest_400000.dic");
+                k.SetValue("3_" + acct, "Own.dic");
+            }
+            AdvancedOptions o = new AdvancedOptions();
+            o.RemoveOurs = false; o.RestoreRepeated = false; o.RemoveAll = false; o.CleanPersonal = true; o.RepairList = true;
+            Result ra = Installer.RemoveAdvanced(false, o);
+            List<string> roamNow = Core.ReadDicWords(roam), customNow = Core.ReadDicWords(custom);
+            Check(ra.Ok, "advanced removal (choices): done (" + ra.Title + ")");
+            Check(roamNow.Count == 2 && roamNow.Contains("שלוםעליכם") && roamNow.Contains("משפחתכהן"),
+                  "the Office personal dictionary keeps the person's words; the Torah words left it (also one written with ״): " + string.Join(" ", roamNow.ToArray()));
+            Check(customNow.Count == 1 && customNow[0] == "מילהשלי", "CUSTOM.DIC keeps the person's word only");
+            using (Microsoft.Win32.RegistryKey k = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(RegFallback.KeyPath))
+                Check(k.GetValue("1_" + acct) as string == roam && k.GetValue("2_" + acct) as string == "Own.dic" && k.GetValue("3_" + acct) == null,
+                      "Word's list repaired: the size-check entry left, the person's entries stay (closed up)");
+            string backup = null;
+            foreach (string d in Directory.GetDirectories(dir, "Backup_*")) if (backup == null || string.CompareOrdinal(d, backup) > 0) backup = d;
+            Check(backup != null && File.Exists(Path.Combine(backup, "RoamingCustom.dic")) && File.Exists(Path.Combine(backup, "CUSTOM.DIC"))
+                  && File.Exists(Path.Combine(backup, "word-dictionary-list.txt")) && ra.Text.Contains(backup),
+                  "a copy of both dictionaries and of Word's list is in the backup folder, and the answer names it");
+            Check(Core.ReadDicWords(Path.Combine(backup, "RoamingCustom.dic")).Count == 4, "the copy is of the dictionary as it was");
+            Check(File.Exists(main) == mainBefore, "our dictionary was not a choice: not touched");
+
+            // c. nothing to do: a clean answer, and no empty backup folder left behind
+            int before = Directory.GetDirectories(dir, "Backup_*").Length;
+            System.Threading.Thread.Sleep(1100);   // (a new folder name)
+            Result rb = Installer.RemoveAdvanced(false, o);
+            Check(rb.Ok && rb.Text.Contains("לא היו") && Directory.GetDirectories(dir, "Backup_*").Length == before,
+                  "nothing left to clean: says so, and leaves no empty backup folder");
+            Microsoft.Win32.Registry.CurrentUser.DeleteSubKeyTree(RegFallback.KeyPath, false);
+            Directory.Delete(elsewhere, true);
+            try { File.Delete(custom); } catch (Exception) { }
         }
     }
 }
