@@ -11,6 +11,7 @@ out.txt (UTF-8, \n):
               the same name - a book in several files, or its copies in several libraries - are one entry)
               place  = book.heading.label.word number (indexes into the tables above)
 Only the books, headings and labels that a kept place uses are written (renumbered)."""
+import re
 import sys
 
 CORE = {'תנ"ך': 0, 'משנה': 1, 'תלמוד בבלי': 2, 'תלמוד ירושלמי': 3}
@@ -24,6 +25,16 @@ rec = {}     # word -> [total, {c: [count, [place]]}, [[book, count, place]], no
 gbooks, gbook_ix = [], {}
 gheads, ghead_ix = [], {}
 glabels, glabel_ix = [], {}
+
+
+LEAD = re.compile(r'^\(([^()]*)\)\s*(.+)$')
+
+
+def display_name(n):
+    """'(דרשות) בית דוד' -> 'בית דוד (דרשות)': the name starts with the book, not with a note in parentheses (Dicta names 9 books
+    so, and has one of them under both names)"""
+    m = LEAD.match(n)
+    return '%s (%s)' % (m.group(2), m.group(1)) if m else n
 
 
 def keep_top(lst, ent, n=3):
@@ -61,7 +72,7 @@ for path in chunks:
         books = [tuple(f.readline().rstrip('\n').split('\t')) for _ in range(section('#BOOKS'))]
         heads = [f.readline().rstrip('\n') for _ in range(section('#HEADS'))]
         labels = [f.readline().rstrip('\n') for _ in range(section('#LABELS'))]
-        bmap = [gid(gbooks, gbook_ix, (b[0], str(CORE[b[1]]) if b[1] in CORE else '-', b[2])) for b in books]
+        bmap = [gid(gbooks, gbook_ix, (display_name(b[0]), str(CORE[b[1]]) if b[1] in CORE else '-', b[2])) for b in books]
         hmap = [gid(gheads, ghead_ix, h) for h in heads]
         lmap = [gid(glabels, glabel_ix, l) for l in labels]
 
