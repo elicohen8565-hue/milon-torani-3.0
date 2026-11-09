@@ -23,6 +23,10 @@ cp "$ROOT"/src/Core.cs "$ROOT"/src/UI.cs "$ROOT"/src/Words.cs "$ROOT"/src/DevDum
 cp "$ROOT/data/basic_list.txt" "$B/basic.txt"
 cp "$ROOT/data/extended_only_list.txt" "$B/more.txt"
 cp "$ROOT/data/hebrew_base.txt" "$B/hebrew_base.txt"
+# the words that earlier versions had and this one dropped (Core.Retired: an update must not keep them as the person's words)
+cp "$ROOT/data/retired_list.txt" "$B/retired.txt"
+# 3.1: where each word appears (made by tools/sources from all the scanned libraries; the self-test checks every word has its place)
+cp "$ROOT/data/sources.txt.gz" "$B/sources.gz"
 cd "$B"
 
 echo "== 1. assets: icon, exact word count of each edition, compressed word lists"

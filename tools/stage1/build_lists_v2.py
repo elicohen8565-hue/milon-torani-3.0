@@ -1,13 +1,16 @@
 """New word lists for version 3.1 (9-11-2026). The basic edition gets every form of the four books that Word marks, and the extended
-edition grows with the most valuable forms of the scanned libraries - up to a total of 300,000 words for the biggest edition
-(extended + chibur torani). No further Word check (the user asked to go on without one): a form goes in when an earlier Word check
+edition grows with every form of the scanned libraries that they have at least 3 times (first, until the user's 15:07 request
+for an exact number, only up to a total of 300,000 words for the biggest edition). No further Word check (the user asked to go on without one): a form goes in when an earlier Word check
 marked it, or when no check asked about it and Hspell does not know it either (82% of such forms were marked before). A form Word
 knows anyway costs only a place in the file.
 
-usage: python3 -I build_lists_v2.py <repo> <stage5 folder> <target total> <out folder for the record>
+usage: python3 -I build_lists_v2.py <repo> <stage5 folder> <minimum occurrences> <out folder for the record> [<sources.txt>]
   The lists in <repo>/data must be those of 3.0 (the starting point). Writes <repo>/data/basic_list.txt and
-  <repo>/data/extended_only_list.txt (sorted, one word per line, as before) and, for the record, added_basic.tsv /
-  added_extended.tsv / moved_to_basic.txt and a summary on stdout.
+  <repo>/data/extended_only_list.txt (sorted, one word per line, as before), <repo>/data/retired_list.txt (the words of 3.0
+  that leave, for Core.Retired) and, for the record, added_basic.tsv / added_extended.tsv / moved_to_basic.txt / retired.tsv
+  and a summary on stdout.
+  sources.txt: the scan of where every word of the lists appears (tools/sources, merge_sources.py output; its "total" column
+  is the number of occurrences in all the libraries together).
 
 Rules:
   - a whole form (the user, 3-11: no fragments): at least 3 letters, or at least 2 letters with a quote mark (" or ': an
@@ -24,11 +27,17 @@ Rules:
       Sefaria libraries hold the files of their own copies, so a form of one copy counts them only together (then at least one of
       them is another file) - any other library counts alone. A form of one copy, seen once or twice, with no other witness is
       more likely a typo of that copy;
-    - the four-book forms are taken before the cap, so the cap limits only the extended edition;
+    - the four-book forms are taken first (when there was a cap, it limited only the extended edition);
   - extended: the remaining forms of the libraries (marked, or untested and unknown to Hspell), best first by the red marks each
-    removes (occurrences in all the libraries x the chance Word marks it), until the biggest edition reaches the target;
+    removes (occurrences in all the libraries x the chance Word marks it) - every one that occurs at least <minimum occurrences>
+    times in all the libraries together (3: a form seen only once or twice is most often a typo of an online text). No cap on
+    the size (the user, 9-11 15:07: an exact number, not a round one; 3.1 first had a cap of 300,000 for the biggest edition);
   - left out: the typos an independent check found in a sample, and text that is not the four books (a reading Sefaria's editors
-    mark as deleted, a scribe's colophon).
+    mark as deleted, a scribe's colophon);
+  - the words of the extended list of 3.0 (most of them from the 2017 dictionary, version 2.0) follow the same rule as the new
+    ones once the sources scan is given: a word that all the libraries together have fewer than <minimum occurrences> times
+    leaves (9-11, the sources scan: 8,123 of them appear nowhere, 2,921 once or twice - most are typos or two words run
+    together: ישמעאחורבן, נחלתתם). They go to retired_list.txt, so that an update does not keep them as the person's words.
 
 3.1 changes after the independent check of the categories (9-11, /home/claude/verify/category_report.md): the final-letter
 rule also sees a quote mark (42 forms like ך"א); the four-book forms come before the cap (before, 2,138 of them were left out by
@@ -45,7 +54,8 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))   # hs.py next to this file (python3 -I leaves the script's folder out)
 from hs import hspell_flags  # noqa: E402
 
-repo, st5, target, rec = sys.argv[1], sys.argv[2], int(sys.argv[3]), sys.argv[4]
+repo, st5, min_occ, rec = sys.argv[1], sys.argv[2], int(sys.argv[3]), sys.argv[4]
+sources = sys.argv[5] if len(sys.argv) > 5 else None
 os.makedirs(rec, exist_ok=True)
 
 
@@ -169,14 +179,28 @@ def total(b, m):
     return len(b | acro | m | comp)
 
 
-# extended: the forms that are not four-book forms, best first, up to the target
+# extended: the forms that are not four-book forms, best first, every one seen at least min_occ times
 cands = sorted(((r[0], r[1], r[2], w, r[3], r[4]) for w, r in lib.items() if not r[5] and w not in basic_set),
                key=lambda r: (-r[0], -r[1], -r[2], r[3]))
-room = target - total(basic_set, more_set)
-chosen = cands[:max(0, room)]
-while total(basic_set, more_set | set(r[3] for r in chosen)) > target:
-    chosen = chosen[:-1]
+chosen = [r for r in cands if r[5] >= min_occ]
 more_set |= set(r[3] for r in chosen)
+
+# the words of 3.0's extended list: the same rule, by the sources scan (the number of occurrences in all the libraries together)
+retired = []
+if sources:
+    totals = {}
+    with open(sources, encoding='utf-8') as f:
+        for line in f:
+            if line.startswith('#W\t'):
+                break
+        for line in f:
+            w, t, _ = line.split('\t', 2)
+            totals[w] = int(t)
+    old_more = set(more) - set(moved)
+    retired = sorted(w for w in old_more if totals.get(w, 0) < min_occ and w not in basic_set)
+    more_set -= set(retired)
+    new_more = more_set - old_more
+    assert all(totals.get(w, 0) >= min_occ for w in new_more), 'a new word of the extended list is missing from the sources scan'
 
 basic_new = sorted(basic_set)
 more_new = sorted(more_set - basic_set)
@@ -195,7 +219,16 @@ with open(os.path.join(rec, 'added_extended.tsv'), 'w', encoding='utf-8', newlin
     for i, r in enumerate(chosen):
         f.write('%d\t%s\t%s\t%d\t%d\t%d\t%.1f\n' % (i, r[3], r[4], r[1], r[2], r[5], r[0]))
 
+with open(os.path.join(repo, 'data/retired_list.txt'), 'w', encoding='utf-8', newline='\n') as f:
+    f.write(''.join(w + '\n' for w in retired))
+if sources:
+    with open(os.path.join(rec, 'retired.tsv'), 'w', encoding='utf-8', newline='\n') as f:
+        f.write('word\toccurrences\n')
+        for w in retired:
+            f.write('%s\t%d\n' % (w, totals.get(w, 0)))
+
 lost = (set(basic) | set(more)) - (set(basic_new) | set(more_new))
+assert lost == set(retired), 'only the retired words may leave (%d left, %d retired)' % (len(lost), len(retired))
 via_lib = sum(1 for r in add_basic if r[1].endswith('+libraries'))
 print('moved from extended to basic: %d (%d stay in extended: in the four books only inside references)' % (
     len(moved), len([w for w in moved_all if w in NOT_TEXT and w in set(more)])))
@@ -205,6 +238,9 @@ print('added to extended: %d of %d candidates (marked before %d); last score %.2
     len(chosen), len(cands), sum(1 for r in chosen if r[4] == 'marked'), chosen[-1][0] if chosen else 0))
 print('after: basic %d | basic + chibur %d | extended %d | extended + chibur %d' % (
     len(set(basic_new) | acro), len(set(basic_new) | acro | comp), len(set(basic_new) | acro | set(more_new)), total(set(basic_new), set(more_new))))
-print('lists: basic_list.txt %d lines, extended_only_list.txt %d lines; old words lost: %d' % (len(basic_new), len(more_new), len(lost)))
+print('lists: basic_list.txt %d lines, extended_only_list.txt %d lines; old words that left: %d (in retired_list.txt; '
+      'none in the libraries %d, once or twice %d)' % (len(basic_new), len(more_new), len(lost),
+                                                       sum(1 for w in retired if totals.get(w, 0) == 0) if sources else 0,
+                                                       sum(1 for w in retired if totals.get(w, 0) > 0) if sources else 0))
 print('kept by the exceptions: ' + ' '.join(sorted(w for w in (set(basic_new) | set(more_new)) - (set(basic) | set(more))
                                                    if ALWAYS.match(w) or THRICE.search(w))[:30]))

@@ -3,6 +3,12 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Drawing2D;
+using System.Globalization;
+using System.IO;
+using System.IO.Compression;
+using System.Reflection;
+using System.Runtime.InteropServices;
+using System.Text;
 using System.Threading;
 using System.Windows.Forms;
 
@@ -16,6 +22,30 @@ namespace OtzariaDict
     // ------------------------------------------------------------------------------------------ a text box in the look of the window
     // A plain Windows text box without a border of its own, inside a frame drawn like the rest of the window (blue while it has the focus).
     // Cue = grey text shown while the box is empty and the focus is elsewhere. Side = small grey text on the left, inside the frame.
+    // 3.1: a little room inside a text box on both sides, so that the caret at its edge is seen whole (the user: it was half hidden)
+    static class TextRoom
+    {
+        [DllImport("user32.dll")]
+        static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
+        const int EM_SETMARGINS = 0xD3, EC_LEFTMARGIN = 1, EC_RIGHTMARGIN = 2;
+
+        public static void Keep(TextBox box)
+        {
+            EventHandler set = delegate
+            {
+                try
+                {
+                    int px = Math.Max(2, Dpi.S(3));
+                    SendMessage(box.Handle, EM_SETMARGINS, (IntPtr)(EC_LEFTMARGIN | EC_RIGHTMARGIN), (IntPtr)((px & 0xFFFF) | (px << 16)));
+                }
+                catch (Exception) { }   // (Mono on Linux: no user32 - only the developer's screenshots)
+            };
+            box.HandleCreated += set;
+            box.FontChanged += set;   // a new font puts Windows' own margins back
+            if (box.IsHandleCreated) set(box, EventArgs.Empty);
+        }
+    }
+
     class FlatTextBox : BaseControl
     {
         public readonly TextBox Box = new TextBox();
@@ -35,6 +65,7 @@ namespace OtzariaDict
             Box.BackColor = Theme.Card;
             Box.ForeColor = Theme.Text;
             Box.MaxLength = 200;
+            TextRoom.Keep(Box);
             Box.TextChanged += delegate { if (!settingText && Changed != null) Changed(this, EventArgs.Empty); };
             Box.GotFocus += delegate { if (showingCue) Put("", false); Invalidate(); };
             Box.LostFocus += delegate { if (Box.Text.Length == 0) Put(cue, true); Invalidate(); };
@@ -110,21 +141,35 @@ namespace OtzariaDict
     abstract class ScrollList : BaseControl
     {
         protected readonly int RowUnits;
-        protected int top, sel = -1, hover = -1;
+        // 3.1 (the user: smooth scrolling, like Windows): the list is scrolled by pixels, not by whole rows, and the mouse wheel glides
+        protected int offY, sel = -1, hover = -1;
         protected readonly VScrollBar bar = new VScrollBar();
         public string EmptyText = "";
         public event EventHandler SelectionChanged;
+        int goal = -1;                              // where a gliding scroll is going (pixels); -1 = not gliding
+        readonly System.Windows.Forms.Timer glide = new System.Windows.Forms.Timer { Interval = 12 };
 
         protected ScrollList(int rowUnits)
         {
             RowUnits = rowUnits;
             TabStop = true;
             BackColor = Theme.Card;
+            DoubleBuffered = true;
             bar.Visible = false;
             bar.TabStop = false;
-            bar.Scroll += delegate { top = bar.Value; hover = -1; Invalidate(); };
+            bar.Scroll += delegate { goal = -1; glide.Stop(); SetOff(bar.Value); };
+            glide.Tick += delegate
+            {
+                if (goal < 0) { glide.Stop(); return; }
+                int step = (goal - offY) * 30 / 100;
+                if (step == 0) step = Math.Sign(goal - offY);
+                SetOff(offY + step);
+                if (offY == goal) { goal = -1; glide.Stop(); }
+            };
             Controls.Add(bar);
         }
+
+        protected override void Dispose(bool disposing) { if (disposing) glide.Dispose(); base.Dispose(disposing); }
 
         protected abstract int Count { get; }
         protected abstract void DrawRow(Graphics g, int index, Rectangle r, bool selected, bool hovered);
@@ -141,28 +186,43 @@ namespace OtzariaDict
             }
         }
         protected int FullRows { get { return Math.Max(1, Inner.Height / RowPx); } }
-        int MaxTop { get { return Math.Max(0, Count - FullRows); } }
+        int MaxOff { get { return Math.Max(0, Count * RowPx - Inner.Height); } }
 
         protected Rectangle RowRect(int i)
         {
             Rectangle inn = Inner;
-            return new Rectangle(inn.X, inn.Y + (i - top) * RowPx, inn.Width, RowPx);
+            return new Rectangle(inn.X, inn.Y + i * RowPx - offY, inn.Width, RowPx);
         }
 
         protected int RowAt(Point p)
         {
             Rectangle inn = Inner;
             if (!inn.Contains(p)) return -1;
-            int i = top + (p.Y - inn.Y) / RowPx;
+            int i = (p.Y - inn.Y + offY) / RowPx;
             return i < Count ? i : -1;
         }
+
+        // the list scrolled to v pixels (kept inside the list)
+        void SetOff(int v)
+        {
+            v = Math.Max(0, Math.Min(MaxOff, v));
+            if (v == offY) return;
+            offY = v;
+            if (bar.Visible && bar.Value != v) bar.Value = Math.Min(Math.Max(bar.Minimum, v), bar.Maximum);
+            hover = -1;
+            Scrolled();
+            Invalidate();
+        }
+
+        protected virtual void Scrolled() { }
 
         // after the rows changed: keepSel = the row to select (-1 = none, and back to the top)
         protected void Reset(int keepSel)
         {
             sel = keepSel >= 0 && keepSel < Count ? keepSel : -1;
             hover = -1;
-            if (sel < 0) top = 0;
+            goal = -1; glide.Stop();
+            if (sel < 0) offY = 0;
             UpdateBar();
             if (sel >= 0) EnsureVisible(sel);
             Invalidate();
@@ -171,31 +231,33 @@ namespace OtzariaDict
 
         void UpdateBar()
         {
-            bool need = Count > FullRows;
+            bool need = Count * RowPx > Height - 2 * Dpi.Hair;
             int hair = Dpi.Hair;
             bar.Bounds = new Rectangle(hair, hair, SystemInformation.VerticalScrollBarWidth, Math.Max(0, Height - 2 * hair));
             bar.Visible = need;
-            top = Math.Max(0, Math.Min(top, MaxTop));
+            offY = Math.Max(0, Math.Min(offY, MaxOff));
             if (need)
             {
+                // in pixels: the thumb is as long as what is seen; one arrow click = one row
                 bar.Value = 0;
                 bar.Minimum = 0;
-                bar.Maximum = Count - 1;
-                bar.LargeChange = FullRows;
-                bar.SmallChange = 1;
-                bar.Value = top;
+                bar.Maximum = Math.Max(0, Count * RowPx - 1);
+                bar.LargeChange = Math.Max(1, Inner.Height);
+                bar.SmallChange = RowPx;
+                bar.Value = Math.Min(offY, bar.Maximum);
             }
         }
 
-        protected override void OnResize(EventArgs e) { base.OnResize(e); UpdateBar(); }
+        protected override void OnResize(EventArgs e) { base.OnResize(e); UpdateBar(); Invalidate(); }
 
         public void EnsureVisible(int i)
         {
             if (i < 0 || i >= Count) return;
-            if (i < top) top = i;
-            else if (i >= top + FullRows) top = i - FullRows + 1;
-            top = Math.Max(0, Math.Min(top, MaxTop));
-            if (bar.Visible) bar.Value = top;
+            goal = -1; glide.Stop();
+            Rectangle inn = Inner;
+            int rowTop = i * RowPx, rowBottom = rowTop + RowPx;
+            if (rowTop < offY) SetOff(rowTop);
+            else if (rowBottom > offY + inn.Height) SetOff(rowBottom - inn.Height);
             Invalidate();
         }
 
@@ -208,16 +270,16 @@ namespace OtzariaDict
             Invalidate();
         }
 
-        void ScrollBy(int rows)
+        // the wheel: three rows a notch (a precise touchpad: in proportion), gliding there in a short moment
+        void GlideBy(int px)
         {
             if (!bar.Visible || Locked) return;
-            top = Math.Max(0, Math.Min(MaxTop, top + rows));
-            bar.Value = top;
+            goal = Math.Max(0, Math.Min(MaxOff, (goal >= 0 ? goal : offY) + px));
             hover = -1;
-            Invalidate();
+            if (!glide.Enabled) glide.Start();
         }
 
-        protected override void OnMouseWheel(MouseEventArgs e) { ScrollBy(-e.Delta / 120 * 3); base.OnMouseWheel(e); }
+        protected override void OnMouseWheel(MouseEventArgs e) { GlideBy(-e.Delta * 3 * RowPx / 120); base.OnMouseWheel(e); }
         protected override void OnMouseMove(MouseEventArgs e)
         {
             int h = Locked ? -1 : RowAt(e.Location);
@@ -277,8 +339,8 @@ namespace OtzariaDict
             {
                 GraphicsState st = g.Save();
                 g.SetClip(inn);
-                int rh = RowPx;
-                for (int i = top, y = inn.Y; i < Count && y < inn.Bottom; i++, y += rh)
+                int rh = RowPx, first = offY / rh;
+                for (int i = first, y = inn.Y + first * rh - offY; i < Count && y < inn.Bottom; i++, y += rh)
                     DrawRow(g, i, new Rectangle(inn.X, y, inn.Width, rh), i == sel, i == hover);
                 g.Restore(st);
             }
@@ -297,6 +359,166 @@ namespace OtzariaDict
         public event EventHandler EditCommit;       // "אישור" or Enter while editing (the window reads EditWord and EditText)
 
         public WordList() : base(30) { EmptyText = ""; }
+
+        // 3.1: the sources of each word, as blue titles on the left of its row (null = no sources)
+        public Func<string, WordSources> SourcesOf;
+        readonly Dictionary<string, WordSources> srcCache = new Dictionary<string, WordSources>(StringComparer.Ordinal);
+        int tipRow = -1, tipItem = -1;   // the blue title under the mouse (tipItem -2 = the "+N" at the end)
+        SourcePopup popup;
+        System.Windows.Forms.Timer tipTimer;
+        static readonly TextFormatFlags One = TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix | TextFormatFlags.SingleLine;
+
+        WordSources Src(string w)
+        {
+            if (SourcesOf == null) return null;
+            WordSources ws;
+            if (srcCache.TryGetValue(w, out ws)) return ws;
+            ws = SourcesOf(w);
+            if (SourceIndex.Ready || SourceIndex.Missing) { if (srcCache.Count > 5000) srcCache.Clear(); srcCache[w] = ws; }   // (not kept while still loading)
+            return ws;
+        }
+
+        public void SourcesChanged() { srcCache.Clear(); Invalidate(); }
+
+        // a word that no library has: a quiet grey note instead of the blue titles (why it is in the dictionary), null = nothing
+        public Func<string, string> NoSourceText;
+
+        // widths of texts in the list, measured once each (the rows are drawn again on every step of a smooth scroll)
+        readonly Dictionary<string, int> widths = new Dictionary<string, int>(StringComparer.Ordinal);
+        int Width(string text, Font f, bool word)
+        {
+            string key = (word ? "w" : "s") + text;
+            int w;
+            if (widths.TryGetValue(key, out w)) return w;
+            w = TextRenderer.MeasureText(text, f, Size.Empty, One).Width;
+            if (widths.Count > 20000) widths.Clear();
+            widths[key] = w;
+            return w;
+        }
+
+        static Font WordFont { get { return Theme.F(15, false); } }
+        static Font SrcFont { get { return Theme.F(13, false); } }
+        static Font SrcFontHover { get { return Theme.F(13, false, true); } }
+
+        // where the word and each blue title of row i go (right to left: the word, then its sources); item -2 = "+N"
+        List<KeyValuePair<Rectangle, int>> Layout(int i, Rectangle r, out Rectangle wordRect, out WordSources ws)
+        {
+            List<KeyValuePair<Rectangle, int>> res = new List<KeyValuePair<Rectangle, int>>();
+            string w = items[i];
+            int tw = Width(w, WordFont, true);
+            int right = r.Right - Dpi.S(14);
+            wordRect = new Rectangle(Math.Max(r.X + Dpi.S(14), right - tw - Dpi.S(2)), r.Y, Math.Min(tw + Dpi.S(2), r.Width - Dpi.S(28)), r.Height);
+            ws = Src(w);
+            // the titles of all the rows start at one line (a column after the usual length of a word); a longer word moves its own
+            // row's titles to the left
+            int x = Math.Min(r.Right - Dpi.S(14 + 150), wordRect.X - Dpi.S(24)), left = r.X + Dpi.S(10), gap = Dpi.S(14);
+            if (ws == null || ws.Items.Count == 0)
+            {
+                string note = NoSourceText != null && SourceIndex.Ready ? NoSourceText(w) : null;
+                if (!string.IsNullOrEmpty(note))
+                {
+                    int nw = Width(note, SrcFont, false);
+                    if (x - nw >= left) res.Add(new KeyValuePair<Rectangle, int>(new Rectangle(x - nw, r.Y + Dpi.S(5), nw, r.Height - Dpi.S(10)), -3));
+                }
+                return res;
+            }
+            int rest = ws.Items.Count + ws.MoreBooks;
+            for (int k = 0; k < ws.Items.Count; k++)
+            {
+                int sw = Width(ws.Items[k].Title, SrcFont, false);
+                int after = rest - 1;   // what is left after this one
+                int moreW = after > 0 ? Width("+" + after, SrcFont, false) + gap : 0;
+                if (x - sw - moreW < left)
+                {
+                    if (k == 0 && x - sw >= left - Dpi.S(4)) { } else break;
+                }
+                res.Add(new KeyValuePair<Rectangle, int>(new Rectangle(x - sw, r.Y + Dpi.S(5), sw, r.Height - Dpi.S(10)), k));
+                x -= sw + gap;
+                rest--;
+            }
+            if (rest > 0)
+            {
+                string more = "+" + rest;
+                int mw = Width(more, SrcFont, false);
+                if (x - mw >= left) res.Add(new KeyValuePair<Rectangle, int>(new Rectangle(x - mw, r.Y + Dpi.S(5), mw, r.Height - Dpi.S(10)), -2));
+            }
+            return res;
+        }
+
+        void HideTip()
+        {
+            if (tipTimer != null) tipTimer.Stop();
+            if (popup != null && popup.Visible) popup.Hide();
+            if (tipRow != -1) { tipRow = -1; tipItem = -1; Invalidate(); }
+        }
+
+        protected override void Scrolled() { HideTip(); }
+        protected override void OnMouseLeave(EventArgs e) { HideTip(); base.OnMouseLeave(e); }
+        protected override void OnLostFocus(EventArgs e) { base.OnLostFocus(e); }
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing) { if (tipTimer != null) tipTimer.Dispose(); if (popup != null) popup.Dispose(); }
+            base.Dispose(disposing);
+        }
+
+        protected override void OnMouseMove(MouseEventArgs e)
+        {
+            base.OnMouseMove(e);
+            if (SourcesOf == null || Editing) return;
+            int row = RowAt(e.Location), item = -1;
+            if (row >= 0)
+            {
+                Rectangle wr; WordSources ws;
+                foreach (KeyValuePair<Rectangle, int> t in Layout(row, RowRect(row), out wr, out ws))
+                    if (t.Value != -3 && t.Key.Contains(e.Location)) { item = t.Value; break; }
+            }
+            if (item == -1) { HideTip(); Cursor = Cursors.Default; return; }
+            Cursor = Cursors.Hand;
+            if (row == tipRow && item == tipItem) return;
+            tipRow = row; tipItem = item;
+            Invalidate();
+            if (popup != null && popup.Visible) ShowTip();   // already open: follow at once
+            else
+            {
+                if (tipTimer == null)
+                {
+                    tipTimer = new System.Windows.Forms.Timer { Interval = 300 };
+                    tipTimer.Tick += delegate { tipTimer.Stop(); ShowTip(); };
+                }
+                tipTimer.Stop();
+                tipTimer.Start();
+            }
+        }
+
+        protected override void OnMouseDown(MouseEventArgs e)
+        {
+            base.OnMouseDown(e);
+            if (tipItem != -1) ShowTip();   // a click on a title: its places at once
+        }
+
+        void ShowTip()
+        {
+            if (tipRow < 0 || tipRow >= items.Count) return;
+            Rectangle rr = RowRect(tipRow), wr; WordSources ws;
+            foreach (KeyValuePair<Rectangle, int> t in Layout(tipRow, rr, out wr, out ws))
+            {
+                if (t.Value != tipItem) continue;
+                if (popup == null) popup = new SourcePopup();
+                Point at = PointToScreen(new Point(t.Key.Right + Dpi.S(8), rr.Bottom + Dpi.S(2)));
+                if (t.Value == -2)
+                {
+                    int shown = 0;
+                    foreach (KeyValuePair<Rectangle, int> u in Layout(tipRow, rr, out wr, out ws)) if (u.Value >= 0) shown++;
+                    int coreLeft = 0, booksLeft = ws.MoreBooks;
+                    for (int k = shown; k < ws.Items.Count; k++) { if (ws.Items[k].Core) coreLeft++; else booksLeft++; }
+                    string txt = "המילה מופיעה גם ב-" + (booksLeft == 1 ? "ספר אחד נוסף" : booksLeft.ToString("N0") + " ספרים נוספים")
+                                 + (coreLeft > 0 ? " ובעוד " + coreLeft + " מארבעת הספרים" : "") + ". בסך הכול " + ws.Total.ToString("N0") + " פעמים.";
+                    popup.ShowFor(this, null, txt, at);
+                }
+                else popup.ShowFor(this, ws.Items[t.Value], null, at);
+                return;
+            }
+        }
 
         protected override int Count { get { return items.Count; } }
         protected override bool Locked { get { return Editing; } }
@@ -374,7 +596,26 @@ namespace OtzariaDict
             Gfx.Rect(g, r, selected ? Theme.Soft : (hovered ? Theme.RowHover : Theme.Card));
             if (selected) Gfx.Rect(g, new Rectangle(r.Right - Dpi.S(4), r.Y, Dpi.S(4), r.Height), Theme.Primary);
             Gfx.HLine(g, r.X, r.Bottom - Dpi.Hair, r.Width, Theme.Line);
-            Gfx.TextAt(g, items[i], Theme.F(15, false), Theme.Text, new Rectangle(r.X + Dpi.S(14), r.Y, r.Width - Dpi.S(28), r.Height), Align.Right, true, false);
+            if (SourcesOf == null)
+            {
+                Gfx.TextAt(g, items[i], WordFont, Theme.Text, new Rectangle(r.X + Dpi.S(14), r.Y, r.Width - Dpi.S(28), r.Height), Align.Right, true, false);
+                return;
+            }
+            Rectangle wr; WordSources ws;
+            List<KeyValuePair<Rectangle, int>> titles = Layout(i, r, out wr, out ws);
+            Gfx.TextAt(g, items[i], WordFont, Theme.Text, new Rectangle(r.X + Dpi.S(14), r.Y, r.Right - Dpi.S(14) - (r.X + Dpi.S(14)), r.Height), Align.Right, true, false);
+            foreach (KeyValuePair<Rectangle, int> t in titles)
+            {
+                if (t.Value == -3)
+                {
+                    Gfx.TextAt(g, NoSourceText(items[i]), SrcFont, Theme.TextQuiet, new Rectangle(t.Key.X - Dpi.S(2), r.Y, t.Key.Width + Dpi.S(4), r.Height), Align.Center, true, false);
+                    continue;
+                }
+                bool hot = i == tipRow && t.Value == tipItem;
+                string text = t.Value == -2 ? "+" + (ws.Items.Count + ws.MoreBooks - (titles.Count - 1)) : ws.Items[t.Value].Title;
+                Color c = t.Value == -2 ? Theme.TextQuiet : (ws.Items[t.Value].Core ? Theme.Primary : Theme.PrimaryHover);
+                Gfx.TextAt(g, text, hot ? SrcFontHover : SrcFont, c, new Rectangle(t.Key.X - Dpi.S(2), r.Y, t.Key.Width + Dpi.S(4), r.Height), Align.Center, true, false);
+            }
         }
     }
 
@@ -395,6 +636,7 @@ namespace OtzariaDict
             Box.BackColor = Theme.Card;
             Box.ForeColor = Theme.Text;
             Box.MaxLength = 200;
+            TextRoom.Keep(Box);
             Ok = new FlatBtn { Text = "אישור", Style = BtnStyle.Filled, Small = true };
             Cancel = new FlatBtn { Text = "ביטול", Style = BtnStyle.Outlined, Light = true, Small = true };
             Controls.AddRange(new Control[] { Box, Ok, Cancel });
@@ -552,6 +794,297 @@ namespace OtzariaDict
     }
 
     // a big title with a round blue tick after it
+    // ------------------------------------------------------------------------------------------ where each word appears (3.1)
+    // The user (9-11): "the online libraries are full of typos" - so the word-editing window shows next to each word where it appears:
+    // a blue title for each source (תנ"ך, משנה, תלמוד בבלי, תלמוד ירושלמי, or the name of the book) and, when the mouse rests on it, the
+    // exact places. The data (Otzaria.sources.gz, made by tools/sources/merge_sources.py from all the scanned libraries) is read once,
+    // on a background thread, the first time the window opens. It stays packed in memory (the bytes of the file); a word is found by a
+    // binary search over its lines, and only the rows on the screen are read out.
+    sealed class WordSource
+    {
+        public string Title;          // the blue title
+        public bool Core;             // one of the four books
+        public int Count;             // how many times the word is there
+        public string Library = "";   // where the book is (אוצריא, דיקטה ...) - for the other books
+        public readonly List<string> Places = new List<string>();   // "מסכת שבת, דף ב עמוד א, שורה 3, מילה 5"
+    }
+
+    sealed class WordSources
+    {
+        public int Total;             // occurrences in all the libraries
+        public int MoreBooks;         // other books that have the word, beyond the ones listed
+        public readonly List<WordSource> Items = new List<WordSource>();
+    }
+
+    static class SourceIndex
+    {
+        public const string Resource = "Otzaria.sources.gz";
+        static readonly string[] CoreTitles = { "תנ\"ך", "משנה", "תלמוד בבלי", "תלמוד ירושלמי" };
+        static byte[] data;
+        static int[] books, heads, labels, words;   // where each line of each part starts in data
+        static bool started;
+        static volatile bool ready, missing;
+        static readonly object gate = new object();
+        public static bool Ready { get { return ready; } }
+        public static bool Missing { get { return missing; } }   // this build has no sources, or they could not be read
+        public static event EventHandler Loaded;                  // (raised on the background thread)
+
+        public static void LoadAsync()
+        {
+            lock (gate) { if (started) { return; } started = true; }
+            Thread t = new Thread(delegate ()
+            {
+                Stopwatch sw = Stopwatch.StartNew();
+                try
+                {
+                    if (!LoadResourceNow()) throw new FileNotFoundException("this build has no sources");
+                    Core.Log("Sources of the words: " + words.Length + " words, " + data.Length / 1000000 + " MB, ready after " + sw.ElapsedMilliseconds + " ms");
+                }
+                catch (Exception ex) { missing = true; Core.Log("Sources of the words not available: " + Core.Msg(ex)); }
+                EventHandler h = Loaded;
+                if (h != null) h(null, EventArgs.Empty);
+            });
+            t.IsBackground = true;
+            t.Start();
+        }
+
+        // reads this program's own sources now (LoadAsync does it in the background); false = this build has none
+        internal static bool LoadResourceNow()
+        {
+            using (Stream s = Assembly.GetExecutingAssembly().GetManifestResourceStream(Resource))
+            {
+                if (s == null) return false;
+                Use(Unzip(s));
+                return true;
+            }
+        }
+
+        // the text of the sources (the self-test gives a small one of its own)
+        internal static void Use(byte[] raw)
+        {
+            lock (gate)
+            {
+                ready = false;
+                data = raw;
+                int pos = 0;
+                books = Part(ref pos, "#B");
+                heads = Part(ref pos, "#H");
+                labels = Part(ref pos, "#L");
+                words = Part(ref pos, "#W");
+                ready = true;
+            }
+        }
+
+        // the whole text, straight into an array of its exact size: gzip keeps the size of the text in its last 4 bytes, and the
+        // program's resource can be read from its end - so the text (about 65 MB) is never held twice while it is read
+        static byte[] Unzip(Stream s)
+        {
+            int size = -1;
+            if (s.CanSeek && s.Length > 18)
+            {
+                long at = s.Position;
+                s.Seek(-4, SeekOrigin.End);
+                byte[] b = new byte[4];
+                if (s.Read(b, 0, 4) == 4) size = b[0] | b[1] << 8 | b[2] << 16 | b[3] << 24;
+                s.Seek(at, SeekOrigin.Begin);
+            }
+            using (GZipStream z = new GZipStream(s, CompressionMode.Decompress, true))
+            {
+                if (size > 0 && size < (1 << 30))
+                {
+                    byte[] buf = new byte[size];
+                    int n = 0, k;
+                    while (n < size && (k = z.Read(buf, n, size - n)) > 0) n += k;
+                    if (n != size || z.ReadByte() >= 0) throw new InvalidDataException("the sources are not whole");
+                    return buf;
+                }
+                using (MemoryStream m = new MemoryStream())
+                {
+                    z.CopyTo(m);
+                    return m.ToArray();
+                }
+            }
+        }
+
+        // a part of the file: its first line "#X<TAB>n", then n lines; returns where those lines start, and moves pos past them
+        static int[] Part(ref int pos, string tag)
+        {
+            string head = Line(pos);
+            if (!head.StartsWith(tag + "\t", StringComparison.Ordinal)) throw new InvalidDataException("expected " + tag);
+            int n = int.Parse(head.Substring(tag.Length + 1), CultureInfo.InvariantCulture);
+            pos = Next(pos);
+            int[] starts = new int[n];
+            for (int i = 0; i < n; i++) { starts[i] = pos; pos = Next(pos); }
+            return starts;
+        }
+
+        static int Next(int pos) { int e = Array.IndexOf(data, (byte)'\n', pos); return e < 0 ? data.Length : e + 1; }
+        static string Line(int start) { int e = Array.IndexOf(data, (byte)'\n', start); return Encoding.UTF8.GetString(data, start, (e < 0 ? data.Length : e) - start); }
+
+        static string WordAt(int start)
+        {
+            int e = Array.IndexOf(data, (byte)'\t', start);
+            return Encoding.UTF8.GetString(data, start, (e < 0 ? data.Length : e) - start);
+        }
+
+        // the sources of a word; null = none known (or not loaded yet)
+        public static WordSources Find(string word)
+        {
+            if (!ready || string.IsNullOrEmpty(word)) return null;
+            int lo = 0, hi = words.Length - 1;
+            while (lo <= hi)
+            {
+                int mid = lo + (hi - lo) / 2;
+                int c = string.CompareOrdinal(WordAt(words[mid]), word);
+                if (c == 0) { try { return Parse(Line(words[mid])); } catch (Exception) { return null; } }
+                if (c < 0) lo = mid + 1; else hi = mid - 1;
+            }
+            return null;
+        }
+
+        static int Num(string s) { return int.Parse(s, CultureInfo.InvariantCulture); }
+
+        static WordSources Parse(string line)
+        {
+            string[] f = line.Split('\t');
+            WordSources ws = new WordSources();
+            ws.Total = Num(f[1]);
+            if (f[2].Length > 0)
+                foreach (string ent in f[2].Split(';'))
+                {
+                    string[] x = ent.Split(new char[] { ':' }, 3);
+                    int code = Num(x[0]);
+                    WordSource src = new WordSource { Title = CoreTitles[code], Core = true, Count = Num(x[1]) };
+                    foreach (string p in x[2].Split(',')) if (p.Length > 0) src.Places.Add(Place(p, code));
+                    ws.Items.Add(src);
+                }
+            int listed = 0;
+            if (f[3].Length > 0)
+                foreach (string ent in f[3].Split(';'))
+                {
+                    string[] x = ent.Split(new char[] { ':' }, 3);
+                    string[] book = Line(books[Num(x[0])]).Split('\t');
+                    WordSource src = new WordSource { Title = book[0], Count = Num(x[1]), Library = book.Length > 2 ? book[2] : "" };
+                    src.Places.Add(Place(x[2], -1));
+                    ws.Items.Add(src);
+                    listed++;
+                }
+            ws.MoreBooks = Math.Max(0, Num(f[4]) - listed);
+            return ws;
+        }
+
+        // "book.heading.label.word" -> "מסכת שבת, דף ב עמוד א, שורה 3, מילה 5"
+        static string Place(string p, int code)
+        {
+            string[] x = p.Split('.');
+            string[] book = Line(books[Num(x[0])]).Split('\t');
+            string name = book[0], head = Line(heads[Num(x[1])]), label = Line(labels[Num(x[2])]);
+            if (code == 2 && !name.StartsWith("מסכת", StringComparison.Ordinal)) name = "מסכת " + name;
+            if (code == 3)
+            {
+                foreach (string pre in new string[] { "תלמוד ירושלמי ", "ירושלמי " })
+                    if (name.StartsWith(pre, StringComparison.Ordinal)) { name = name.Substring(pre.Length); break; }
+                if (!name.StartsWith("מסכת", StringComparison.Ordinal)) name = "מסכת " + name;
+            }
+            bool number = label.Length > 0 && char.IsDigit(label[0]);
+            string where = number || code < 0 || code > 1 ? "שורה " + label : (code == 0 ? "פסוק " : "משנה ") + label;
+            StringBuilder sb = new StringBuilder(name);
+            if (head.Length > 0) sb.Append(", ").Append(head);
+            sb.Append(", ").Append(where).Append(", מילה ").Append(x[3]);
+            if (code >= 0 && book.Length > 2 && book[2] != "אוצריא") sb.Append(" (").Append(book[2]).Append(")");
+            return sb.ToString();
+        }
+    }
+
+    // the floating window with the exact places of one source (shown while the mouse rests on its blue title)
+    sealed class SourcePopup : Form
+    {
+        WordSource src;
+        string extra;   // instead of a source: a line such as "ועוד 12 ספרים"
+
+        public SourcePopup()
+        {
+            FormBorderStyle = FormBorderStyle.None;
+            ShowInTaskbar = false;
+            StartPosition = FormStartPosition.Manual;
+            BackColor = Theme.Card;
+            DoubleBuffered = true;
+            AutoScaleMode = AutoScaleMode.None;
+        }
+
+        protected override bool ShowWithoutActivation { get { return true; } }
+        protected override CreateParams CreateParams
+        {
+            get
+            {
+                CreateParams cp = base.CreateParams;
+                cp.ExStyle |= 0x08000000 | 0x00000080;   // WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW: never takes the focus, not in Alt+Tab
+                cp.ClassStyle |= 0x00020000;              // CS_DROPSHADOW: the soft shadow of Windows' own pop-ups
+                return cp;
+            }
+        }
+
+        static Font TitleFont { get { return Theme.F(14, true); } }
+        static Font LineFont { get { return Theme.F(13, false); } }
+
+        List<string> Lines()
+        {
+            List<string> l = new List<string>();
+            if (src == null) { l.Add(extra ?? ""); return l; }
+            l.AddRange(src.Places);
+            if (src.Count > src.Places.Count) l.Add("ועוד " + (src.Count - src.Places.Count).ToString("N0") + (src.Count - src.Places.Count == 1 ? " מקום" : " מקומות"));
+            return l;
+        }
+
+        string Head()
+        {
+            if (src == null) return "";
+            return src.Title + "  ·  " + (src.Count == 1 ? "פעם אחת" : src.Count.ToString("N0") + " פעמים") + (src.Library.Length > 0 ? "  ·  " + src.Library : "");
+        }
+
+        // shows the places of s (or the line text) under the point "at" (screen), its right edge there (right to left)
+        public void ShowFor(Control owner, WordSource s, string text, Point at)
+        {
+            src = s; extra = text;
+            int pad = Dpi.S(12), w = Dpi.S(200), h = pad;
+            TextFormatFlags fl = TextFormatFlags.RightToLeft | TextFormatFlags.NoPrefix | TextFormatFlags.SingleLine;
+            if (src != null) { w = Math.Max(w, TextRenderer.MeasureText(Head(), TitleFont, Size.Empty, fl).Width); h += Dpi.S(24); }
+            foreach (string line in Lines()) { w = Math.Max(w, TextRenderer.MeasureText(line, LineFont, Size.Empty, fl).Width); h += Dpi.S(21); }
+            w = Math.Min(w + 2 * pad, Dpi.S(560));
+            h += pad - Dpi.S(2);
+            Rectangle area = Screen.FromPoint(at).WorkingArea;
+            int x = Math.Max(area.Left, Math.Min(at.X - w, area.Right - w)), y = at.Y;
+            if (y + h > area.Bottom) y = Math.Max(area.Top, at.Y - h - Dpi.S(36));
+            Bounds = new Rectangle(x, y, w, h);
+            if (!Visible)
+            {
+                Form top = owner.FindForm();
+                if (top != null && Owner != top) Owner = top;
+                Show();
+            }
+            Invalidate();
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            Graphics g = e.Graphics;
+            Gfx.Rect(g, ClientRectangle, Theme.Card);
+            Gfx.Frame(g, ClientRectangle, Theme.BorderHover, Dpi.Hair);
+            int pad = Dpi.S(12), y = pad - Dpi.S(2), w = Width - 2 * pad;
+            if (src != null)
+            {
+                Gfx.TextAt(g, Head(), TitleFont, Theme.Primary, new Rectangle(pad, y, w, Dpi.S(22)), Align.Right, true, false);
+                y += Dpi.S(24);
+            }
+            foreach (string line in Lines())
+            {
+                Gfx.TextAt(g, line, LineFont, line.StartsWith("ועוד", StringComparison.Ordinal) ? Theme.TextQuiet : Theme.Text,
+                           new Rectangle(pad, y, w, Dpi.S(20)), Align.Right, true, false);
+                y += Dpi.S(21);
+            }
+        }
+    }
+
     class TitleTick : BaseControl
     {
         protected override void OnPaint(PaintEventArgs e)
@@ -586,7 +1119,9 @@ namespace OtzariaDict
         List<WordChange> saved;   // the person's changes as they are on this computer
         readonly string editionName;
         readonly string allWordsHead;
-        TextBlock listLabel, listNote, addHint, chLabel;
+        TextBlock listLabel, listNote, addHint, chLabel, title, sub, addLabel, chNote;
+        LowerPanel lower;
+        FlatBtn btnClose;
         FlatTextBox search, addBox;
         WordList list;
         ChangeList changes;
@@ -598,6 +1133,18 @@ namespace OtzariaDict
         public bool Saved;        // the changes were saved
         public bool Sent;         // ... and sent to the dictionary's owner by the program
         public bool ViaBrowser;   // ... or the GitHub page was opened for the person to send them
+
+        // the forms the program makes by itself (every abbreviation of 2-3 letters; "chibur torani": a connector before a Hebrew word)
+        HashSet<string> made, madeComp;
+
+        // why a word that no library has is in the dictionary (a quiet note in its row)
+        string NoSource(string w)
+        {
+            if (edits.IsPersons(w)) return "הוספתם";
+            if (made.Contains(w)) return "ראשי תיבות";
+            if (madeComp.Contains(w)) return "חיבור תורני";
+            return "לא נמצא בספרים";
+        }
 
         public WordsForm(bool extended, bool compose, bool isInstalled, bool demoOnly)
         {
@@ -613,17 +1160,21 @@ namespace OtzariaDict
 
             Text = MainForm.Title;
             AutoScaleMode = AutoScaleMode.None;
-            FormBorderStyle = FormBorderStyle.FixedDialog;
-            MaximizeBox = false; MinimizeBox = false; ShowInTaskbar = false;
+            // 3.1 (the user): the window can be made bigger from every side and maximized; the list of words grows with it
+            FormBorderStyle = FormBorderStyle.Sizable;
+            MaximizeBox = true; MinimizeBox = false; ShowInTaskbar = false;
             if (Dpi.Forced) { StartPosition = FormStartPosition.Manual; Location = new Point(0, 0); }
             else StartPosition = FormStartPosition.CenterParent;
             BackColor = Theme.Card;
             Font = Theme.F(14, false);
             ClientSize = Dpi.Sz(780, 640);
+            MinimumSize = Size;
+            Rectangle work = Screen.PrimaryScreen.WorkingArea;
+            ClientSize = new Size(Math.Max(Dpi.S(780), Math.Min(Dpi.S(1000), work.Width - Dpi.S(40))), Math.Max(Dpi.S(640), Math.Min(Dpi.S(700), work.Height - Dpi.S(60))));
             Icon = MainForm.AppIcon();
 
-            TextBlock title = new TextBlock { Bounds = Dpi.R(28, 20, 724, 34), Font = Theme.F(22, true), Color = Theme.Text, VCenter = true, Wrap = false, Text = "עריכת מילים" };
-            TextBlock sub = new TextBlock
+            title = new TextBlock { Bounds = Dpi.R(28, 20, 724, 34), Font = Theme.F(22, true), Color = Theme.Text, VCenter = true, Wrap = false, Text = "עריכת מילים" };
+            sub = new TextBlock
             {
                 Bounds = Dpi.R(28, 58, 724, 44), Font = Theme.F(14, false), Color = Theme.TextSoft,
                 Text = "חפשו מילה כדי לתקן את האיות שלה או להסיר אותה מהמילון, או הוסיפו מילה חדשה. השינויים "
@@ -641,19 +1192,19 @@ namespace OtzariaDict
             btnRemove = new FlatBtn { Bounds = Dpi.R(460, 512, 140, 36), Text = "הסר מהמילון", Style = BtnStyle.Outlined, Light = true };
 
             // left side: a new word, and the person's changes
-            TextBlock addLabel = new TextBlock { Bounds = Dpi.R(28, 108, 280, 22), Font = Theme.F(14, true), Color = Theme.Text, VCenter = true, Wrap = false, Text = "הוספת מילה חדשה" };
+            addLabel = new TextBlock { Bounds = Dpi.R(28, 108, 280, 22), Font = Theme.F(14, true), Color = Theme.Text, VCenter = true, Wrap = false, Text = "הוספת מילה חדשה" };
             addBox = new FlatTextBox(15) { Bounds = Dpi.R(118, 134, 190, 36) };
             addBox.Cue = "מילה חדשה";
             btnAdd = new FlatBtn { Bounds = Dpi.R(28, 134, 80, 36), Text = "הוסף", Style = BtnStyle.Filled };
             addHint = new TextBlock { Bounds = Dpi.R(28, 175, 280, 38), Font = Theme.F(13, false), Color = Theme.Primary };
             chLabel = new TextBlock { Bounds = Dpi.R(28, 214, 280, 22), Font = Theme.F(14, true), Color = Theme.Text, VCenter = true, Wrap = false };
             changes = new ChangeList(40) { Bounds = Dpi.R(28, 240, 280, 242) };
-            TextBlock chNote = new TextBlock { Bounds = Dpi.R(28, 488, 280, 40), Font = Theme.F(13, false), Color = Theme.TextQuiet,
+            chNote = new TextBlock { Bounds = Dpi.R(28, 488, 280, 40), Font = Theme.F(13, false), Color = Theme.TextQuiet,
                 Text = "השינויים נשמרים במחשב שלכם, וחלים גם אחרי כל עדכון של המילון." };
 
-            LowerPanel lower = new LowerPanel { Bounds = Dpi.R(0, 568, 780, 72) };
+            lower = new LowerPanel { Bounds = Dpi.R(0, 568, 780, 72) };
             btnSave = new FlatBtn { Bounds = Dpi.R(532, 16, 220, 40), Text = installed ? "שמור ועדכן את וורד" : "שמור", Style = BtnStyle.Filled };
-            FlatBtn btnClose = new FlatBtn { Bounds = Dpi.R(28, 16, 110, 40), Text = "סגור", Style = BtnStyle.Outlined, Light = true };
+            btnClose = new FlatBtn { Bounds = Dpi.R(28, 16, 110, 40), Text = "סגור", Style = BtnStyle.Outlined, Light = true };
             lower.Controls.AddRange(new Control[] { btnSave, btnClose });
 
             // the order of the Tab key: right to left, top to bottom
@@ -682,9 +1233,51 @@ namespace OtzariaDict
             btnSave.Click += delegate { DoSave(); };
             btnClose.Click += delegate { Close(); };
 
+            // 3.1: where each word appears (read in the background; the rows show it as soon as it is there)
+            list.SourcesOf = SourceIndex.Find;
+            made = new HashSet<string>(Core.MakeAcronyms(2, 3), StringComparer.Ordinal);
+            madeComp = compose ? new HashSet<string>(Core.MakeComposition(), StringComparer.Ordinal) : new HashSet<string>();
+            list.NoSourceText = NoSource;
+            SourceIndex.Loaded += SourcesLoaded;
+            SourceIndex.LoadAsync();
+
+            LayoutAll();
             RefreshAll(null, -1);
             ActiveControl = search.Box;
         }
+
+        void SourcesLoaded(object s, EventArgs e)
+        {
+            try { if (IsHandleCreated && !IsDisposed) BeginInvoke((MethodInvoker)delegate { list.SourcesChanged(); if (listNote.Text.Length == 0) Note("", false); }); }
+            catch (Exception) { }
+        }
+
+        protected override void OnFormClosed(FormClosedEventArgs e) { SourceIndex.Loaded -= SourcesLoaded; base.OnFormClosed(e); }
+
+        // 3.1: the place of everything for the window's size (the design is 780 x 640): the list of words and the list of changes grow
+        // in height, the list of words also in width; the buttons stay at their corners
+        void LayoutAll()
+        {
+            if (lower == null) return;
+            int W = ClientSize.Width, H = ClientSize.Height;
+            int ex = Math.Max(0, W - Dpi.S(780)), ey = Math.Max(0, H - Dpi.S(640));
+            title.Bounds = new Rectangle(Dpi.S(28), Dpi.S(20), W - Dpi.S(56), Dpi.S(34));
+            sub.Bounds = new Rectangle(Dpi.S(28), Dpi.S(58), W - Dpi.S(56), Dpi.S(44));
+            int rx = Dpi.S(322), rw = Dpi.S(430) + ex;
+            listLabel.Bounds = new Rectangle(rx, Dpi.S(108), rw, Dpi.S(22));
+            search.Bounds = new Rectangle(rx, Dpi.S(134), rw, Dpi.S(36));
+            list.Bounds = new Rectangle(rx, Dpi.S(178), rw, Dpi.S(302) + ey);
+            listNote.Bounds = new Rectangle(rx, Dpi.S(484) + ey, rw, Dpi.S(22));
+            btnFix.Bounds = new Rectangle(Dpi.S(612) + ex, Dpi.S(512) + ey, Dpi.S(140), Dpi.S(36));
+            btnRemove.Bounds = new Rectangle(Dpi.S(460) + ex, Dpi.S(512) + ey, Dpi.S(140), Dpi.S(36));
+            changes.Bounds = new Rectangle(Dpi.S(28), Dpi.S(240), Dpi.S(280), Dpi.S(242) + ey);
+            chNote.Bounds = new Rectangle(Dpi.S(28), Dpi.S(488) + ey, Dpi.S(280), Dpi.S(40));
+            lower.Bounds = new Rectangle(0, Dpi.S(568) + ey, W, Dpi.S(72));
+            btnSave.Bounds = new Rectangle(Dpi.S(532) + ex, Dpi.S(16), Dpi.S(220), Dpi.S(40));
+            btnClose.Bounds = new Rectangle(Dpi.S(28), Dpi.S(16), Dpi.S(110), Dpi.S(40));
+        }
+
+        protected override void OnResize(EventArgs e) { base.OnResize(e); LayoutAll(); }
 
         bool Dirty { get { return !SameChanges(edits.Changes, saved); } }
 
@@ -735,6 +1328,8 @@ namespace OtzariaDict
 
         void Note(string text, bool error)
         {
+            // nothing to say: the hint about the sources (3.1), once they are there
+            if (string.IsNullOrEmpty(text) && SourceIndex.Ready) { text = "בכחול: איפה המילה מופיעה. עמדו עליו עם העכבר כדי לראות את המקום המדויק."; error = false; }
             listNote.Color = error ? Theme.Error : Theme.TextQuiet;
             listNote.Text = text;
         }
@@ -902,6 +1497,13 @@ namespace OtzariaDict
             list.EditText = "בסוגיין";
             UpdateButtons();
             Note("כתבו את האיות הנכון ולחצו \"אישור\" (או Enter). Esc – ביטול.", false);
+        }
+
+        // for the developer's screenshots of the sources: the list found by a search, no row being edited
+        public void DemoSearch(string q)
+        {
+            search.Value = q;
+            RefreshAll(null, -1);
         }
 
         public static List<WordChange> DemoChanges()

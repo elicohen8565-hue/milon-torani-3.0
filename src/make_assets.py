@@ -1,6 +1,7 @@
 # Rebuilds the binary/derived inputs of TorahDictionary.exe (run in the build folder before build.sh; scripts/build_all.sh does it all, see BUILD.md)
 #   pip install wordfreq pillow
 #   basic.txt / more.txt  = data/basic_list.txt / data/extended_only_list.txt  (copy them here first)
+#   retired.txt           = data/retired_list.txt (the words earlier versions had and this one dropped; may be empty)
 #   hebrew_base.txt       = if the file is already in this folder (copy data/hebrew_base.txt) it is used exactly as it is;
 #                           only when it is missing it is generated from wordfreq. Using the saved copy keeps the
 #                           "chibur torani" list - and with it the word counts - identical from build to build.
@@ -91,4 +92,6 @@ with open('counts.txt', 'w', encoding='utf-8', newline='\n') as f:
 print('counts:', ', '.join('%s=%d' % kv for kv in counts))
 
 # 4. gzip the word lists that are embedded as resources
-subprocess.check_call(['gzip', '-kf', '-9', 'basic.txt', 'more.txt', 'hebrew_base.txt'])
+if not os.path.exists('retired.txt'):
+    open('retired.txt', 'w').close()
+subprocess.check_call(['gzip', '-kf', '-9', 'basic.txt', 'more.txt', 'hebrew_base.txt', 'retired.txt'])
