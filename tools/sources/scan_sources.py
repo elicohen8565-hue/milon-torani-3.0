@@ -10,7 +10,7 @@ usage: python3 -I scan_sources.py <targets.txt> <list.tsv> <out.tsv>
 
 The files are read straight from git (cat-file --batch), nothing is checked out. Words are cut exactly as in every earlier scan
 (tokens.py), so a word of the lists is found as it is.
-For each word: per core collection the number of occurrences and the first 2 places; the 3 other books where it appears most
+For each word: per core collection and copy (collection|library) the number of occurrences and the first 2 places; the 3 other books where it appears most
 (each with its number of occurrences and its first place; of books with the same number, the one scanned first); how many
 other books in all; the total number of occurrences.
 A place = (book, heading, label, word number); label = the verse / mishna mark for Tanakh and Mishna, else the line number
@@ -166,9 +166,12 @@ def merge_file(found, book, kind, collection):
             r = rec[w] = [0, {}, [], 0, -1]   # total, core, other books (top 3), number of other books, the last book counted
         r[0] += cnt
         if kind == 'core':
-            c = r[1].get(collection)
+            # each copy of the four books apart (the Otzaria copy and the Sefaria copy): a word the Bavli has once is not shown
+            # as "twice", and its two places are not one place in two copies (merge_sources.py shows one copy)
+            key = collection + '|' + books[book][2]
+            c = r[1].get(key)
             if c is None:
-                c = r[1][collection] = [0, []]
+                c = r[1][key] = [0, []]
             c[0] += cnt
             for p in places:
                 if len(c[1]) < 2:

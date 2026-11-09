@@ -6,7 +6,8 @@ out.txt (UTF-8, \n):
   #H <n>      then n lines: heading
   #L <n>      then n lines: label (a verse / mishna mark, or a line number)
   #W <n>      then n lines, sorted by code point: word <TAB> total <TAB> core <TAB> others <TAB> number of other books
-              core   = entries "c:count:place,place" joined by ";" (c = 0 Tanakh, 1 Mishna, 2 Bavli, 3 Yerushalmi)
+              core   = entries "c:count:place,place" joined by ";" (c = 0 Tanakh, 1 Mishna, 2 Bavli, 3 Yerushalmi), each
+                       from one copy (Otzaria's, or the other copy when Otzaria's does not have the word)
               others = entries "book:count:place" joined by ";" - the 3 books where the word appears most, most first (books of
               the same name - a book in several files, or its copies in several libraries - are one entry)
               place  = book.heading.label.word number (indexes into the tables above)
@@ -40,8 +41,11 @@ def display_name(n):
 def keep_top(lst, ent, n=3):
     """lst keeps the n entries with the biggest count (ent[1]); of equal counts, the one that came first stays"""
     for e in lst:
-        if gbooks[e[0]][0] == gbooks[ent[0]][0]:   # a book of the same name (another file of it, or its copy in another library):
-            e[1] += ent[1]                         # one entry, the counts added up, the first place kept
+        if gbooks[e[0]][0] == gbooks[ent[0]][0]:   # a book of the same name: one entry, its first place kept
+            if e[0] == ent[0]:
+                e[1] += ent[1]                     # more files of the same book in the same library: added up
+            else:
+                e[1] = max(e[1], ent[1])           # its copy in another library: the same text, not more occurrences
             return
     if len(lst) < n:
         lst.append(ent)
@@ -92,10 +96,11 @@ for path in chunks:
             if core:
                 for ent in core.split(';'):
                     coll, cnt, places = ent.split(':', 2)
-                    c = CORE[coll]
-                    e = r[1].get(c)
+                    name, lib = coll.split('|', 1) if '|' in coll else (coll, '')
+                    key = (CORE[name], lib)          # each copy apart; one is chosen below
+                    e = r[1].get(key)
                     if e is None:
-                        e = r[1][c] = [0, []]
+                        e = r[1][key] = [0, []]
                     e[0] += int(cnt)
                     for p in places.split(','):
                         if p and len(e[1]) < 2:
@@ -119,8 +124,19 @@ def use(d, i):
 
 
 lines = []
+def one_copy(core):
+    """per collection one copy of the four books: Otzaria's, or else the first other copy that has the word (its places then say
+    whose copy it is) - the counts and places are those of one copy, not of two copies added up"""
+    res = {}
+    for (c, lib), v in core.items():
+        if c not in res or lib == 'אוצריא':
+            res[c] = v
+    return res
+
+
 for w in sorted(rec):
     total, core, other, nother = rec[w]
+    core = one_copy(core)
     cs = ';'.join('%d:%d:%s' % (c, v[0], ','.join('%d.%d.%d.%d' % (use(used_b, p[0]), use(used_h, p[1]), use(used_l, p[2]), p[3]) for p in v[1]))
                   for c, v in sorted(core.items()))
     os_ = ';'.join('%d:%d:%d.%d.%d.%d' % (use(used_b, b), cnt, use(used_b, p[0]), use(used_h, p[1]), use(used_l, p[2]), p[3])

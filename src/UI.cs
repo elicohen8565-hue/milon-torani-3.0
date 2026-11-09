@@ -1058,7 +1058,7 @@ namespace OtzariaDict
                 Text = "בחרו מה לעשות. לפני כל שינוי נשמר עותק גיבוי." };
             rOurs = Row(96, "הסרת המילון התורני", "כמו \"הסר מוורד\": המילון יוצא מוורד. מילים שהוספתם בעצמכם נשמרות.", Options.RemoveOurs);
             rPersonal = Row(176, "הסרת המילים שלו גם מהמילון האישי של וורד",
-                "המילון שאליו וורד שומר מילים ב\"הוסף למילון\". רק מילים של המילון התורני יוצאות, שאר המילים שלכם נשארות.", Options.CleanPersonal);
+                "המילון של \"הוסף למילון\", וגם CUSTOM.DIC של גרסה 2.0. רק מילים של המילון התורני יוצאות; שאר המילים שלכם נשארות.", Options.CleanPersonal);
             rList = Row(256, "תיקון רשימת המילונים של וורד",
                 "מנקה מהרשימה של וורד רשומות ישנות של התוכנה ושל בדיקות, שחוסמות הוספת מילונים (למשל אחרי בדיקת הגודל).", Options.RepairList);
             // (on at first only when this program switched the marking off; the person may have switched it off in Word, so the text
@@ -1595,7 +1595,7 @@ namespace OtzariaDict
                 o = d.Options;
             }
             if (!WordIsClosedOrIgnored(false)) return;   // asked only after the person chose what to do
-            Work(delegate { return Installer.RemoveAdvanced(true, o); });
+            Work(delegate { return Installer.RemoveAdvanced(true, o, delegate (int p, string what) { UI(delegate { prog.Value = p; SetStage(what); }); }); });
         }
 
         void StartManual()
@@ -2084,6 +2084,7 @@ namespace OtzariaDict
             SelfTestReviewFixes(dir);
             SelfTestWordEditing(dir);
             SelfTestRemoval31(dir);
+            SelfTestRemoval31b(dir);
             SelfTestRetired(dir);
             SelfTestSources();
 
@@ -2586,14 +2587,157 @@ namespace OtzariaDict
             WordSources m = SourceIndex.Find("מיבעי");
             WordSource bavli = null;
             if (m != null) foreach (WordSource s in m.Items) if (s.Title == "תלמוד בבלי") bavli = s;
-            Check(bavli != null && bavli.Count > 1000 && bavli.Places.Count > 0 && bavli.Places[0].StartsWith("מסכת ", StringComparison.Ordinal)
-                  && bavli.Places[0].Contains("דף "), "מיבעי: in the Bavli, more than 1,000 times, first at " + (bavli == null || bavli.Places.Count == 0 ? "?" : bavli.Places[0]));
+            // (one copy of the Bavli is counted: about 650 times - the Otzaria and the Sefaria copies added up would be about 1,300)
+            Check(bavli != null && bavli.Count > 500 && bavli.Count < 1000 && bavli.Places.Count > 0 && bavli.Places[0].StartsWith("מסכת ", StringComparison.Ordinal)
+                  && bavli.Places[0].Contains("דף "), "מיבעי: in the Bavli " + (bavli == null ? "?" : bavli.Count.ToString("N0")) + " times (one copy), first at "
+                  + (bavli == null || bavli.Places.Count == 0 ? "?" : bavli.Places[0]));
+            WordSources once = SourceIndex.Find("אאבוד");
+            WordSource ob = null;
+            if (once != null) foreach (WordSource s in once.Items) if (s.Title == "תלמוד בבלי") ob = s;
+            Check(ob != null && ob.Count == 1 && ob.Places.Count == 1, "אאבוד: once in the Bavli, one place (not the same place in two copies)");
             int missingBasic = 0, missingMore = 0, n = 0;
             sw = Stopwatch.StartNew();
             foreach (string w in Core.LoadWords(Core.BasicRes)) { n++; if (SourceIndex.Find(w) == null) missingBasic++; }
             foreach (string w in Core.LoadWords(Core.MoreRes)) { n++; if (SourceIndex.Find(w) == null) missingMore++; }
             Check(missingBasic == 0 && missingMore == 0, "every word of the two lists has its sources, read without a fault: " + n.ToString("N0")
                   + " words, " + sw.ElapsedMilliseconds + " ms (missing: basic " + missingBasic + ", extended " + missingMore + ")");
+        }
+
+        static string NewestBackup(string dir)
+        {
+            string b = null;
+            foreach (string d in Directory.GetDirectories(dir, "Backup_*")) if (b == null || string.CompareOrdinal(d, b) > 0) b = d;
+            return b;
+        }
+
+        // 3.1, after the code review of the removal choices (I1-I3, I5, M1, M3, M12): each check failed on the code before the fix
+        static void SelfTestRemoval31b(string dir)
+        {
+            Console.WriteLine("-- 3.1: the removal choices together (after the code review)");
+            string main = Path.Combine(dir, Core.MainFile), custom = Path.Combine(dir, "CUSTOM.DIC"), own = Path.Combine(dir, "Own.dic");
+            string elsewhere = Path.Combine(dir, "roaming-31b");
+            Directory.CreateDirectory(elsewhere);
+            string roam = Path.Combine(elsewhere, "RoamingCustom.dic");
+            string acct = "16_7bd116fa7f21d40b_LiveId";
+            List<string> all = Core.BuildWords(true, true);
+            string torah1 = all[10];
+            Installer.PersonalFilesHook = null;
+
+            // I1: "delete every custom dictionary" together with the other choices - one backup folder, named in the answer, and the name of a
+            // dictionary that could not be cleared
+            System.Threading.Thread.Sleep(1100);
+            Microsoft.Win32.Registry.CurrentUser.DeleteSubKeyTree(RegFallback.KeyPath, false);
+            Core.WriteDic(own, new List<string> { "מילהשלי" });
+            Core.WriteDic(custom, new List<string> { "מילהאחרת" });
+            AdvancedOptions oa = new AdvancedOptions();
+            oa.RemoveOurs = true; oa.CleanPersonal = true; oa.RepairList = true; oa.RestoreRepeated = false; oa.RemoveAll = true;
+            Core.FailDeleteHook = delegate (string f) { return Path.GetFileName(f) == "Own.dic"; };
+            Core.FailWriteHook = delegate (string f) { return Path.GetFileName(f) == "Own.dic"; };
+            Result rx;
+            try { rx = Installer.RemoveAdvanced(false, oa); } finally { Core.FailDeleteHook = null; Core.FailWriteHook = null; }
+            string bx = NewestBackup(dir);
+            Check(bx != null && File.Exists(Path.Combine(bx, "CUSTOM.DIC")) && File.Exists(Path.Combine(bx, "dictionaries.txt")) && rx.Text.Contains(bx),
+                  "delete all + the other choices: the copies are in one backup folder, and the answer names it");
+            Check(!rx.Ok && rx.Text.Contains("Own.dic"), "delete all: a dictionary that could not be cleared is named in the answer");
+            try { File.Delete(own); } catch (Exception) { }
+
+            // I2: a word that left the dictionary in 3.1 stays in Office's personal dictionary (no version of the program writes there: the
+            // person put it there), and leaves CUSTOM.DIC (version 2.0 wrote its words there); a word of the person that "remove the
+            // dictionary" has just moved from our file to CUSTOM.DIC is not taken out again by the clean
+            System.Threading.Thread.Sleep(1100);
+            InstallWithFakeWord(new FakeApp(), false, new FakeApp());
+            List<string> inMain = Core.ReadDicWords(main);
+            inMain.Add("רש״י");   // added by the person through Word, with the Hebrew gershayim
+            Core.WriteDic(main, inMain);
+            Microsoft.Win32.Registry.CurrentUser.DeleteSubKeyTree(RegFallback.KeyPath, false);
+            using (Microsoft.Win32.RegistryKey k = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(RegFallback.KeyPath)) k.SetValue("1_" + acct, roam);
+            Core.WriteDic(roam, new List<string> { "נחלתתם", "שלוםעליכם", torah1 });
+            Core.WriteDic(custom, new List<string> { "ישמעאחורבן", "מילהשלי" });
+            AdvancedOptions oi = new AdvancedOptions();
+            oi.RemoveOurs = true; oi.CleanPersonal = true; oi.RepairList = false; oi.RestoreRepeated = false; oi.RemoveAll = false;
+            Result ri = Installer.RemoveAdvanced(false, oi);
+            List<string> roamNow = Core.ReadDicWords(roam), customNow = Core.ReadDicWords(custom);
+            Check(roamNow.Contains("נחלתתם") && roamNow.Contains("שלוםעליכם") && !roamNow.Contains(torah1),
+                  "Office's personal dictionary: a Torah word left; a word that left the dictionary in 3.1 stays (the person added it)");
+            Check(!customNow.Contains("ישמעאחורבן") && customNow.Contains("מילהשלי"), "CUSTOM.DIC: the words of version 2.0 that left the dictionary go too");
+            Check(customNow.Contains("רש״י") && ri.Ok, "the person's word moved from our file to CUSTOM.DIC is kept by the clean");
+
+            // I3: the choice "mark repeated words again" does it also when the person switched the marking off in Word itself
+            System.Threading.Thread.Sleep(1100);
+            Stamp.WriteRepeatOff(false);
+            FakeApp w3 = new FakeApp();
+            w3.Options.RepeatWord = false;
+            WordCom.OpenHook = delegate { WordSession s = new WordSession(); s.App = w3; s.Created = true; return s; };
+            AdvancedOptions orp = new AdvancedOptions();
+            orp.RemoveOurs = false; orp.CleanPersonal = false; orp.RepairList = false; orp.RestoreRepeated = true; orp.RemoveAll = false;
+            Result r3;
+            try { r3 = Installer.RemoveAdvanced(true, orp); } finally { WordCom.OpenHook = null; }
+            Check(w3.Options.RepeatWord && r3.Ok && r3.Text.Contains("יסמן שוב"), "the repeated-words choice switches the marking on although this program did not switch it off");
+            InstallWithFakeWord(new FakeApp(), false, new FakeApp());
+            FakeApp w4 = new FakeApp();
+            w4.Options.RepeatWord = false;
+            WordCom.OpenHook = delegate { WordSession s = new WordSession(); s.App = w4; s.Created = true; return s; };
+            orp.RemoveOurs = true;
+            try { r3 = Installer.RemoveAdvanced(true, orp); } finally { WordCom.OpenHook = null; }
+            Check(w4.Options.RepeatWord && r3.Text.Contains("יסמן שוב"), "... also together with \"remove the dictionary\"");
+
+            // I5: Outlook (or another Office program) is open: it writes Word's list and the personal dictionary back when it closes, so they
+            // are not changed, and the answer says why
+            Microsoft.Win32.Registry.CurrentUser.DeleteSubKeyTree(RegFallback.KeyPath, false);
+            using (Microsoft.Win32.RegistryKey k = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(RegFallback.KeyPath))
+            {
+                k.SetValue("1_" + acct, roam);
+                k.SetValue("2_" + acct, "Milon_SizeTest_400000.dic");
+            }
+            Core.WriteDic(roam, new List<string> { "שלוםעליכם", torah1 });
+            AdvancedOptions oo = new AdvancedOptions();
+            oo.RemoveOurs = false; oo.CleanPersonal = true; oo.RepairList = true; oo.RestoreRepeated = false; oo.RemoveAll = false;
+            WordCom.OtherOfficeHook = delegate { return new List<string> { "Outlook" }; };
+            Result ro;
+            try { ro = Installer.RemoveAdvanced(false, oo); } finally { WordCom.OtherOfficeHook = null; }
+            bool entryStays;
+            using (Microsoft.Win32.RegistryKey k = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(RegFallback.KeyPath))
+                entryStays = k.GetValue("2_" + acct) as string == "Milon_SizeTest_400000.dic";
+            Check(!ro.Ok && ro.Text.Contains("Outlook") && Core.ReadDicWords(roam).Contains(torah1) && entryStays,
+                  "Outlook is open: Word's list and the personal dictionary are not changed, and the answer names Outlook");
+
+            // M1 + M12: a personal dictionary that cannot be written - named, no "there were no Torah words", the file as it was; one word: singular
+            System.Threading.Thread.Sleep(1100);
+            Core.FailWriteHook = delegate (string f) { return f == roam; };
+            AdvancedOptions op = new AdvancedOptions();
+            op.RemoveOurs = false; op.CleanPersonal = true; op.RepairList = false; op.RestoreRepeated = false; op.RemoveAll = false;
+            Result rw;
+            try { rw = Installer.RemoveAdvanced(false, op); } finally { Core.FailWriteHook = null; }
+            Check(!rw.Ok && rw.Text.Contains("RoamingCustom.dic") && !rw.Text.Contains("לא היו") && Core.ReadDicWords(roam).Count == 2,
+                  "a personal dictionary that cannot be written: named, not \"there were none\", and left whole");
+            System.Threading.Thread.Sleep(1100);
+            Result r1 = Installer.RemoveAdvanced(false, op);
+            Check(r1.Ok && r1.Text.Contains("מילה אחת"), "one word out: \"מילה אחת\", not \"1 מילים\"");
+
+            // M3: "remove the dictionary" stopped (the person's words in our file could not be kept elsewhere): our entry stays in Word's list
+            InstallWithFakeWord(new FakeApp(), false, new FakeApp());
+            inMain = Core.ReadDicWords(main);
+            inMain.Add("מילהשלהאדםבוורד");
+            Core.WriteDic(main, inMain);
+            Microsoft.Win32.Registry.CurrentUser.DeleteSubKeyTree(RegFallback.KeyPath, false);
+            using (Microsoft.Win32.RegistryKey k = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(RegFallback.KeyPath))
+            {
+                k.SetValue("1_" + acct, main);
+                k.SetValue("2_" + acct, "Milon_SizeTest_400000.dic");
+            }
+            AdvancedOptions om = new AdvancedOptions();
+            om.RemoveOurs = true; om.CleanPersonal = false; om.RepairList = true; om.RestoreRepeated = false; om.RemoveAll = false;
+            Core.FailWriteHook = delegate (string f) { return string.Equals(Path.GetFileName(f), "CUSTOM.DIC", StringComparison.OrdinalIgnoreCase); };
+            Result rm;
+            try { rm = Installer.RemoveAdvanced(false, om); } finally { Core.FailWriteHook = null; }
+            using (Microsoft.Win32.RegistryKey k = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(RegFallback.KeyPath))
+                Check(!rm.Ok && File.Exists(main) && k.GetValue("1_" + acct) as string == main && k.GetValue("2_" + acct) == null,
+                      "the dictionary could not be removed: its entry stays in Word's list (the size-check entry still goes)");
+
+            Microsoft.Win32.Registry.CurrentUser.DeleteSubKeyTree(RegFallback.KeyPath, false);
+            Installer.Remove(false);
+            try { Directory.Delete(elsewhere, true); } catch (Exception) { }
+            foreach (string f in new string[] { custom, custom + ".bak", own }) try { File.Delete(f); } catch (Exception) { }
         }
 
         static void SelfTestRemoval31(string dir)
@@ -2636,6 +2780,15 @@ namespace OtzariaDict
                 k.SetValue("3_" + acct, "Own.dic");
             }
             Installer.PersonalFilesHook = null;
+            InstallWithFakeWord(new FakeApp(), false, new FakeApp());   // (our dictionary is there, and must stay)
+            bool mainBefore = File.Exists(main);
+            Microsoft.Win32.Registry.CurrentUser.DeleteSubKeyTree(RegFallback.KeyPath, false);
+            using (Microsoft.Win32.RegistryKey k = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(RegFallback.KeyPath))
+            {
+                k.SetValue("1_" + acct, roam);
+                k.SetValue("2_" + acct, "Milon_SizeTest_400000.dic");
+                k.SetValue("3_" + acct, "Own.dic");
+            }
             AdvancedOptions o = new AdvancedOptions();
             o.RemoveOurs = false; o.RestoreRepeated = false; o.RemoveAll = false; o.CleanPersonal = true; o.RepairList = true;
             Result ra = Installer.RemoveAdvanced(false, o);
@@ -2653,7 +2806,7 @@ namespace OtzariaDict
                   && File.Exists(Path.Combine(backup, "word-dictionary-list.txt")) && ra.Text.Contains(backup),
                   "a copy of both dictionaries and of Word's list is in the backup folder, and the answer names it");
             Check(Core.ReadDicWords(Path.Combine(backup, "RoamingCustom.dic")).Count == 4, "the copy is of the dictionary as it was");
-            Check(File.Exists(main) || true, "(our dictionary was not a choice: not touched)");
+            Check(File.Exists(main) == mainBefore, "our dictionary was not a choice: not touched");
 
             // c. nothing to do: a clean answer, and no empty backup folder left behind
             int before = Directory.GetDirectories(dir, "Backup_*").Length;

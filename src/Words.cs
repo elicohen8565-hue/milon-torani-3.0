@@ -157,7 +157,7 @@ namespace OtzariaDict
             DoubleBuffered = true;
             bar.Visible = false;
             bar.TabStop = false;
-            bar.Scroll += delegate { goal = -1; glide.Stop(); SetOff(bar.Value); };
+            bar.Scroll += delegate (object s, ScrollEventArgs e) { goal = -1; glide.Stop(); SetOff(e.NewValue); };   // (Value is set only after Scroll)
             glide.Tick += delegate
             {
                 if (goal < 0) { glide.Stop(); return; }
@@ -385,7 +385,7 @@ namespace OtzariaDict
 
         // widths of texts in the list, measured once each (the rows are drawn again on every step of a smooth scroll)
         readonly Dictionary<string, int> widths = new Dictionary<string, int>(StringComparer.Ordinal);
-        int Width(string text, Font f, bool word)
+        int TextWidth(string text, Font f, bool word)
         {
             string key = (word ? "w" : "s") + text;
             int w;
@@ -401,11 +401,11 @@ namespace OtzariaDict
         static Font SrcFontHover { get { return Theme.F(13, false, true); } }
 
         // where the word and each blue title of row i go (right to left: the word, then its sources); item -2 = "+N"
-        List<KeyValuePair<Rectangle, int>> Layout(int i, Rectangle r, out Rectangle wordRect, out WordSources ws)
+        List<KeyValuePair<Rectangle, int>> TitleLayout(int i, Rectangle r, out Rectangle wordRect, out WordSources ws)
         {
             List<KeyValuePair<Rectangle, int>> res = new List<KeyValuePair<Rectangle, int>>();
             string w = items[i];
-            int tw = Width(w, WordFont, true);
+            int tw = TextWidth(w, WordFont, true);
             int right = r.Right - Dpi.S(14);
             wordRect = new Rectangle(Math.Max(r.X + Dpi.S(14), right - tw - Dpi.S(2)), r.Y, Math.Min(tw + Dpi.S(2), r.Width - Dpi.S(28)), r.Height);
             ws = Src(w);
@@ -417,7 +417,7 @@ namespace OtzariaDict
                 string note = NoSourceText != null && SourceIndex.Ready ? NoSourceText(w) : null;
                 if (!string.IsNullOrEmpty(note))
                 {
-                    int nw = Width(note, SrcFont, false);
+                    int nw = TextWidth(note, SrcFont, false);
                     if (x - nw >= left) res.Add(new KeyValuePair<Rectangle, int>(new Rectangle(x - nw, r.Y + Dpi.S(5), nw, r.Height - Dpi.S(10)), -3));
                 }
                 return res;
@@ -425,9 +425,9 @@ namespace OtzariaDict
             int rest = ws.Items.Count + ws.MoreBooks;
             for (int k = 0; k < ws.Items.Count; k++)
             {
-                int sw = Width(ws.Items[k].Title, SrcFont, false);
+                int sw = TextWidth(ws.Items[k].Title, SrcFont, false);
                 int after = rest - 1;   // what is left after this one
-                int moreW = after > 0 ? Width("+" + after, SrcFont, false) + gap : 0;
+                int moreW = after > 0 ? TextWidth("+" + after, SrcFont, false) + gap : 0;
                 if (x - sw - moreW < left)
                 {
                     if (k == 0 && x - sw >= left - Dpi.S(4)) { } else break;
@@ -439,7 +439,7 @@ namespace OtzariaDict
             if (rest > 0)
             {
                 string more = "+" + rest;
-                int mw = Width(more, SrcFont, false);
+                int mw = TextWidth(more, SrcFont, false);
                 if (x - mw >= left) res.Add(new KeyValuePair<Rectangle, int>(new Rectangle(x - mw, r.Y + Dpi.S(5), mw, r.Height - Dpi.S(10)), -2));
             }
             return res;
@@ -453,6 +453,13 @@ namespace OtzariaDict
         }
 
         protected override void Scrolled() { HideTip(); }
+
+        protected override void OnResize(EventArgs e)
+        {
+            base.OnResize(e);
+            HideTip();
+            if (Editing && sel >= 0) { EnsureVisible(sel); editor.Bounds = RowRect(sel); }   // (the rows may have moved, and the width changed)
+        }
         protected override void OnMouseLeave(EventArgs e) { HideTip(); base.OnMouseLeave(e); }
         protected override void OnLostFocus(EventArgs e) { base.OnLostFocus(e); }
         protected override void Dispose(bool disposing)
@@ -469,7 +476,7 @@ namespace OtzariaDict
             if (row >= 0)
             {
                 Rectangle wr; WordSources ws;
-                foreach (KeyValuePair<Rectangle, int> t in Layout(row, RowRect(row), out wr, out ws))
+                foreach (KeyValuePair<Rectangle, int> t in TitleLayout(row, RowRect(row), out wr, out ws))
                     if (t.Value != -3 && t.Key.Contains(e.Location)) { item = t.Value; break; }
             }
             if (item == -1) { HideTip(); Cursor = Cursors.Default; return; }
@@ -500,7 +507,7 @@ namespace OtzariaDict
         {
             if (tipRow < 0 || tipRow >= items.Count) return;
             Rectangle rr = RowRect(tipRow), wr; WordSources ws;
-            foreach (KeyValuePair<Rectangle, int> t in Layout(tipRow, rr, out wr, out ws))
+            foreach (KeyValuePair<Rectangle, int> t in TitleLayout(tipRow, rr, out wr, out ws))
             {
                 if (t.Value != tipItem) continue;
                 if (popup == null) popup = new SourcePopup();
@@ -508,11 +515,14 @@ namespace OtzariaDict
                 if (t.Value == -2)
                 {
                     int shown = 0;
-                    foreach (KeyValuePair<Rectangle, int> u in Layout(tipRow, rr, out wr, out ws)) if (u.Value >= 0) shown++;
+                    foreach (KeyValuePair<Rectangle, int> u in TitleLayout(tipRow, rr, out wr, out ws)) if (u.Value >= 0) shown++;
                     int coreLeft = 0, booksLeft = ws.MoreBooks;
                     for (int k = shown; k < ws.Items.Count; k++) { if (ws.Items[k].Core) coreLeft++; else booksLeft++; }
-                    string txt = "המילה מופיעה גם ב-" + (booksLeft == 1 ? "ספר אחד נוסף" : booksLeft.ToString("N0") + " ספרים נוספים")
-                                 + (coreLeft > 0 ? " ובעוד " + coreLeft + " מארבעת הספרים" : "") + ". בסך הכול " + ws.Total.ToString("N0") + " פעמים.";
+                    List<string> parts = new List<string>();
+                    if (booksLeft > 0) parts.Add(booksLeft == 1 ? "בעוד ספר אחד" : "בעוד כ-" + booksLeft.ToString("N0") + " ספרים");
+                    if (coreLeft > 0) parts.Add(coreLeft == 1 ? "בעוד אחד מארבעת הספרים" : "בעוד " + coreLeft + " מארבעת הספרים");
+                    string txt = "המילה מופיעה גם " + string.Join(" ו", parts.ToArray()) + ". בכל הספריות יחד: "
+                                 + (ws.Total == 1 ? "פעם אחת." : ws.Total.ToString("N0") + " פעמים.");
                     popup.ShowFor(this, null, txt, at);
                 }
                 else popup.ShowFor(this, ws.Items[t.Value], null, at);
@@ -530,6 +540,7 @@ namespace OtzariaDict
         // a new list of words (sorted); keepWord = the word to select if it is in it, else the row at fallback (-1 = none)
         public void SetItems(List<string> list, string keepWord, int fallback)
         {
+            HideTip();
             if (Editing) StopEdit();
             items = list;
             int i = keepWord == null ? -1 : list.BinarySearch(keepWord, StringComparer.Ordinal);
@@ -540,6 +551,7 @@ namespace OtzariaDict
         public void BeginEdit()
         {
             if (sel < 0 || Editing) return;
+            HideTip();
             EnsureVisible(sel);
             editWord = items[sel];
             if (editor == null)
@@ -602,7 +614,7 @@ namespace OtzariaDict
                 return;
             }
             Rectangle wr; WordSources ws;
-            List<KeyValuePair<Rectangle, int>> titles = Layout(i, r, out wr, out ws);
+            List<KeyValuePair<Rectangle, int>> titles = TitleLayout(i, r, out wr, out ws);
             Gfx.TextAt(g, items[i], WordFont, Theme.Text, new Rectangle(r.X + Dpi.S(14), r.Y, r.Right - Dpi.S(14) - (r.X + Dpi.S(14)), r.Height), Align.Right, true, false);
             foreach (KeyValuePair<Rectangle, int> t in titles)
             {
@@ -1026,6 +1038,14 @@ namespace OtzariaDict
 
         static Font TitleFont { get { return Theme.F(14, true); } }
         static Font LineFont { get { return Theme.F(13, false); } }
+        static Font NoteFont { get { return Theme.F(12, false); } }
+        const TextFormatFlags OneLine = TextFormatFlags.RightToLeft | TextFormatFlags.NoPrefix | TextFormatFlags.SingleLine;
+        const TextFormatFlags Wrapped = TextFormatFlags.RightToLeft | TextFormatFlags.Right | TextFormatFlags.NoPrefix | TextFormatFlags.WordBreak;
+        // a place is "line N, word M" in the book's digital file - not the line of a printed page
+        const string PlaceNote = "השורה והמילה – בקובץ הדיגיטלי של הספר";
+        List<string> lines = new List<string>();
+        List<int> heights = new List<int>();
+        int textW;
 
         List<string> Lines()
         {
@@ -1042,20 +1062,32 @@ namespace OtzariaDict
             return src.Title + "  ·  " + (src.Count == 1 ? "פעם אחת" : src.Count.ToString("N0") + " פעמים") + (src.Library.Length > 0 ? "  ·  " + src.Library : "");
         }
 
-        // shows the places of s (or the line text) under the point "at" (screen), its right edge there (right to left)
+        // shows the places of s (or the line text) under the point "at" (screen), its right edge there (right to left).
+        // A long place wraps onto more lines (its end - the line and the word - is what matters).
         public void ShowFor(Control owner, WordSource s, string text, Point at)
         {
             src = s; extra = text;
-            int pad = Dpi.S(12), w = Dpi.S(200), h = pad;
-            TextFormatFlags fl = TextFormatFlags.RightToLeft | TextFormatFlags.NoPrefix | TextFormatFlags.SingleLine;
-            if (src != null) { w = Math.Max(w, TextRenderer.MeasureText(Head(), TitleFont, Size.Empty, fl).Width); h += Dpi.S(24); }
-            foreach (string line in Lines()) { w = Math.Max(w, TextRenderer.MeasureText(line, LineFont, Size.Empty, fl).Width); h += Dpi.S(21); }
-            w = Math.Min(w + 2 * pad, Dpi.S(560));
-            h += pad - Dpi.S(2);
+            int pad = Dpi.S(12), w = Dpi.S(200), most = Dpi.S(520);
+            if (src != null) w = Math.Max(w, TextRenderer.MeasureText(Head(), TitleFont, Size.Empty, OneLine).Width);
+            lines = Lines();
+            foreach (string line in lines) w = Math.Max(w, TextRenderer.MeasureText(line, LineFont, Size.Empty, OneLine).Width);
+            textW = Math.Min(w, most);
+            heights = new List<int>();
+            int h = pad - Dpi.S(2);
+            if (src != null) h += Dpi.S(24);
+            foreach (string line in lines)
+            {
+                int lh = Math.Max(Dpi.S(20), TextRenderer.MeasureText(line, LineFont, new Size(textW, int.MaxValue), Wrapped).Height);
+                heights.Add(lh);
+                h += lh + Dpi.S(1);
+            }
+            if (src != null && src.Places.Count > 0) h += Dpi.S(22);   // the note about "line" and "word"
+            h += pad;
+            int fullW = textW + 2 * pad;
             Rectangle area = Screen.FromPoint(at).WorkingArea;
-            int x = Math.Max(area.Left, Math.Min(at.X - w, area.Right - w)), y = at.Y;
+            int x = Math.Max(area.Left, Math.Min(at.X - fullW, area.Right - fullW)), y = at.Y;
             if (y + h > area.Bottom) y = Math.Max(area.Top, at.Y - h - Dpi.S(36));
-            Bounds = new Rectangle(x, y, w, h);
+            Bounds = new Rectangle(x, y, fullW, h);
             if (!Visible)
             {
                 Form top = owner.FindForm();
@@ -1076,12 +1108,14 @@ namespace OtzariaDict
                 Gfx.TextAt(g, Head(), TitleFont, Theme.Primary, new Rectangle(pad, y, w, Dpi.S(22)), Align.Right, true, false);
                 y += Dpi.S(24);
             }
-            foreach (string line in Lines())
+            for (int i = 0; i < lines.Count && i < heights.Count; i++)
             {
-                Gfx.TextAt(g, line, LineFont, line.StartsWith("ועוד", StringComparison.Ordinal) ? Theme.TextQuiet : Theme.Text,
-                           new Rectangle(pad, y, w, Dpi.S(20)), Align.Right, true, false);
-                y += Dpi.S(21);
+                Color c = lines[i].StartsWith("ועוד", StringComparison.Ordinal) ? Theme.TextQuiet : Theme.Text;
+                TextRenderer.DrawText(g, lines[i], LineFont, new Rectangle(pad, y, w, heights[i]), c, Wrapped);
+                y += heights[i] + Dpi.S(1);
             }
+            if (src != null && src.Places.Count > 0)
+                Gfx.TextAt(g, PlaceNote, NoteFont, Theme.TextQuiet, new Rectangle(pad, y + Dpi.S(4), w, Dpi.S(18)), Align.Right, true, false);
         }
     }
 
@@ -1243,6 +1277,7 @@ namespace OtzariaDict
 
             LayoutAll();
             RefreshAll(null, -1);
+            if (SourceIndex.Ready) Note("", false);   // (read when the window was opened before: no "loaded" now)
             ActiveControl = search.Box;
         }
 
