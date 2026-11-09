@@ -1610,7 +1610,7 @@ namespace OtzariaDict
             info = Core.DetectInstalled();
             Check(info.Edition == 1 && !info.Compose, "detected: basic, no composition");
             int nb = WordsIn(main, out bom, out first);
-            Check(nb == Core.BuildWords(false, false).Count && nb < 70000, "basic file has " + nb + " words");
+            Check(nb == Core.BuildWords(false, false).Count && nb < Core.BuildWords(true, false).Count, "basic file has " + nb + " words (fewer than the extended one)");
 
             Console.WriteLine("-- advanced removal (foreign dictionaries too)");
             Core.WriteDic(Path.Combine(dir, "CUSTOM.DIC"), new List<string> { "מילהפרטית", "עודאחת" });
