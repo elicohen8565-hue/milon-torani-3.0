@@ -1,4 +1,4 @@
-"""How often each word appears AS WRITTEN in each book (3.1.0.2, 11-11-2026) - for the rule "a book counts once".
+"""How often each word appears AS WRITTEN in each book (3.1.0.1, 11-11-2026) - for the rule "a book counts once".
 
 usage: python3 -I recount_books.py <words.txt> <list.tsv> <out.tsv>
 

@@ -1801,7 +1801,7 @@ namespace OtzariaDict
             return n == 1 ? "מילה אחת שהוספתם בעצמכם לוורד הועברה" : n.ToString("N0") + " מילים שהוספתם בעצמכם לוורד הועברו";
         }
 
-        // "remove from Word" of the window (3.1.0.2, the user: "the removal should also remove what earlier versions put in"): Remove, and
+        // "remove from Word" of the window (3.1.0.1, the user: "the removal should also remove what earlier versions put in"): Remove, and
         // then what earlier versions left behind: the words of the Torah dictionary in CUSTOM.DIC (version 2.0 wrote its words there; also
         // the words that have left the dictionary since) and the old entries in Word's list of dictionaries (old file names, the size
         // check). Office's RoamingCustom.dic - the words the person added in Word - is not touched here (the advanced removal offers it).

@@ -1,4 +1,4 @@
-"""Version 3.1.0.2 (11-11-2026): the words of the extended list that one book alone has, fewer than 3 times.
+"""Version 3.1.0.1 (11-11-2026): the words of the extended list that one book alone has, fewer than 3 times.
 
 usage: python3 -I drop_single_book.py <repo>
 Run after drop_typos.py. Takes the words of single_book_words.txt (next to this file; made by tools/sources/dedup_count.py from

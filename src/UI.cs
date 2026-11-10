@@ -679,7 +679,7 @@ namespace OtzariaDict
             get { return selected; }
             set
             {
-                if (value != selected && CheckStyle && IsHandleCreated && Visible) StartSlide(value);
+                if (value != selected && IsHandleCreated && Visible) StartSlide(value);
                 selected = value;
                 Invalidate();
             }
@@ -688,6 +688,8 @@ namespace OtzariaDict
 
         // 3.1 (the user: the switch should slide elegantly): the knob slides across in 180 ms, slowing down at the end, and the colour of
         // the switch changes with it. slideFrom / slideTo: 0 = off, 1 = on.
+        // 3.1.0.1 (the user: the change between the basic and the extended card "passes all at once", it should be soft and flowing):
+        // a card of the round mark changes the same way - its light blue, its ring, its mark and its count pill fade in and out.
         float slideFrom, slideTo;
         DateTime slideStart;
         System.Windows.Forms.Timer slide;
@@ -703,7 +705,7 @@ namespace OtzariaDict
             }
             slide.Start();
         }
-        float SlideT() { return Math.Min(1f, (float)(DateTime.UtcNow - slideStart).TotalMilliseconds / 180f); }
+        float SlideT() { return Math.Min(1f, (float)(DateTime.UtcNow - slideStart).TotalMilliseconds / (CheckStyle ? 180f : 220f)); }
         float SwitchPos()
         {
             if (slide == null || !slide.Enabled) return selected ? 1f : 0f;
@@ -733,10 +735,12 @@ namespace OtzariaDict
             // a light blue ring
             Rectangle r = ClientRectangle;
             int rad = Dpi.S(18), ringW = Math.Max(2, Dpi.S(2));
-            bool lit = selected && Highlight;
-            Color back = lit ? Theme.Soft : (hover ? Theme.CardHover : Theme.Card);
+            float sel = SwitchPos();                       // 0 = not chosen, 1 = chosen, between them while it changes
+            float lit = Highlight ? sel : 0f;
+            Color plain = hover ? Theme.CardHover : Theme.Card;
+            Color back = Gfx.Mix(plain, Theme.Soft, lit);
             Gfx.Fill(g, r, rad, back);
-            if (lit) Gfx.Ring(g, r, rad, Theme.Primary, ringW);
+            if (lit > 0f) Gfx.Ring(g, r, rad, Gfx.Mix(hover ? Theme.RingHover : plain, Theme.Primary, lit), ringW);
             else if (hover) Gfx.Ring(g, r, rad, Theme.RingHover, ringW);
             if (Focused && !viaMouse && ShowFocusCues)
             {
@@ -750,7 +754,7 @@ namespace OtzariaDict
             if (CheckStyle)
             {
                 Rectangle sw = new Rectangle(markRight - Dpi.S(44), r.Y + (r.Height - Dpi.S(26)) / 2, Dpi.S(44), Dpi.S(26));
-                float p = SwitchPos();   // 0 = off (the knob on the right), 1 = on (the knob on the left: right to left)
+                float p = sel;           // 0 = off (the knob on the right), 1 = on (the knob on the left: right to left)
                 int knob = Dpi.S(18), pad = (sw.Height - knob) / 2;
                 Gfx.Fill(g, sw, sw.Height / 2, Gfx.Mix(hover ? Theme.SwitchOffHover : Theme.SwitchOff, hover ? Theme.PrimaryHover : Theme.Primary, p));
                 int kx = (int)Math.Round((sw.Right - pad - knob) + ((sw.X + pad) - (sw.Right - pad - knob)) * p);
@@ -761,12 +765,22 @@ namespace OtzariaDict
             {
                 int m = Dpi.S(22);
                 Rectangle dot = new Rectangle(markRight - m, r.Y + (r.Height - m) / 2, m, m);
-                if (selected)
+                if (sel >= 1f)
                 {
                     Gfx.Dot(g, dot, Theme.Primary);
                     Gfx.Dot(g, Rectangle.Inflate(dot, -Dpi.S(7), -Dpi.S(7)), Theme.OnPrimary);
                 }
-                else Gfx.RingDot(g, dot, back, hover ? Theme.MarkHover : Theme.Mark, ringW);
+                else
+                {
+                    // the ring turns blue, and the blue grows from the edge inwards until only the white middle is left
+                    if (sel <= 0f) Gfx.RingDot(g, dot, back, hover ? Theme.MarkHover : Theme.Mark, ringW);
+                    else
+                    {
+                        int hole = (int)Math.Round((m / 2 - ringW) - (m / 2 - ringW - (m / 2 - Dpi.S(7))) * sel);   // from the whole inside to the white middle
+                        Gfx.Dot(g, dot, Gfx.Mix(hover ? Theme.MarkHover : Theme.Mark, Theme.Primary, sel));
+                        Gfx.Dot(g, Rectangle.Inflate(dot, -(m / 2 - hole), -(m / 2 - hole)), Gfx.Mix(back, Theme.OnPrimary, sel));
+                    }
+                }
                 markLeft = dot.X;
             }
 
@@ -780,8 +794,8 @@ namespace OtzariaDict
                 catch (Exception) { tw = Dpi.S(90); }
                 pillW = tw + Dpi.S(26);
                 Rectangle pill = new Rectangle(r.X + Dpi.S(20), r.Y + (r.Height - Dpi.S(28)) / 2, pillW, Dpi.S(28));
-                Gfx.Fill(g, pill, pill.Height / 2, lit ? Theme.SoftPill : Theme.Pill);
-                Gfx.TextAt(g, Count, cf, lit ? Theme.OnSoftPill : Theme.OnPill, pill, Align.Center, true, false);
+                Gfx.Fill(g, pill, pill.Height / 2, Gfx.Mix(Theme.Pill, Theme.SoftPill, lit));
+                Gfx.TextAt(g, Count, cf, Gfx.Mix(Theme.OnPill, Theme.OnSoftPill, lit), pill, Align.Center, true, false);
             }
 
             int textRight = markLeft - Dpi.S(16);
@@ -2198,6 +2212,12 @@ namespace OtzariaDict
             foreach (string t in new string[] { "הייינו", "חיייב", "עדייין", "כתוכ", "חחח", "עובדכוכבים", "הכתובשנאמר", "דוואו", "וכדיאללה", "דהיטלר" })
                 if (everySet.Contains(t) || !retiredSet.Contains(t)) { typosOut = false; Console.WriteLine("     still in: " + t); }
             Check(typosOut, "typos, run-together words and unfit common words are out of every edition, and retired");
+            // 3.1.0.1 (the user: "a book enters only once"; "check that chibur torani has no nonsense and that nothing is missing")
+            bool oneBook = !everySet.Contains("וביהידות") && retiredSet.Contains("וביהידות");
+            bool chibur = !everySet.Contains("דפייסבוק") && !everySet.Contains("דולכן") && retiredSet.Contains("דפייסבוק") && retiredSet.Contains("דולכן")
+                          && everySet.Contains("ומדקושיא") && everySet.Contains("וכדסברא") && everySet.Contains("כדהגמרא") && everySet.Contains("דודאי");
+            Check(oneBook, "a word that one book alone has, once (in three libraries), is out and retired");
+            Check(chibur, "chibur torani: no forms of words that Torah books hardly write or of words with a prefix; the words of Torah books are in");
             Check(everySet.Contains("לייי") && everySet.Contains("ובבבא") && everySet.Contains("התתתונים") && everySet.Contains("דמגעיל") && everySet.Contains("דזונה"),
                   "the forms that only look like typos, and Torah words, stay");
 
@@ -2750,7 +2770,7 @@ namespace OtzariaDict
             Result r1 = Installer.RemoveAdvanced(false, op);
             Check(r1.Ok && r1.Text.Contains("מילה אחת"), "one word out: \"מילה אחת\", not \"1 מילים\"");
 
-            // 3.1.0.2 (the user: "the removal should also remove what earlier versions put in"): the plain "remove from Word" also takes
+            // 3.1.0.1 (the user: "the removal should also remove what earlier versions put in"): the plain "remove from Word" also takes
             // the words of the Torah dictionary (and the words that left it) out of CUSTOM.DIC - version 2.0 wrote its words there - and the
             // old entries out of Word's list. The dictionary of "Add to Dictionary" (RoamingCustom.dic) is the person's own: untouched.
             System.Threading.Thread.Sleep(1100);

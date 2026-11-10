@@ -1,4 +1,4 @@
-"""Which words of the extended list only ONE book has, fewer than 3 times (3.1.0.2, 11-11-2026).
+"""Which words of the extended list only ONE book has, fewer than 3 times (3.1.0.1, 11-11-2026).
 
 usage: python3 -I dedup_count.py <words.txt> <out.txt> <recount_books output> [<recount_books output> ...]
 
