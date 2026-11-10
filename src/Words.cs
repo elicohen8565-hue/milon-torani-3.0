@@ -681,7 +681,7 @@ namespace OtzariaDict
                 }
                 bool hot = i == tipRow && t.Value == tipItem;
                 string text = t.Value == -2 ? "+" + (ws.Items.Count + ws.MoreBooks - (titles.Count - 1)) : ws.Items[t.Value].Title;
-                Color c = t.Value == -2 ? Theme.TextQuiet : (ws.Items[t.Value].Core ? Theme.Primary : Theme.PrimaryHover);
+                Color c = t.Value == -2 ? Theme.TextQuiet : (ws.Items[t.Value].Core ? Theme.Link : Theme.PrimaryDark);
                 Gfx.TextAt(g, text, hot ? SrcFontHover : SrcFont, c, new Rectangle(t.Key.X - Dpi.S(2), r.Y, t.Key.Width + Dpi.S(4), r.Height), Align.Center, true, false);
             }
         }
@@ -790,7 +790,7 @@ namespace OtzariaDict
             if (AllowUndo)
             {
                 Rectangle u = UndoRect(r);
-                Gfx.TextAt(g, "בטל", Theme.F(13, false), Theme.Primary, u, Align.Center, true, false);
+                Gfx.TextAt(g, "בטל", Theme.F(13, false), Theme.Link, u, Align.Center, true, false);
                 left = u.Right + Dpi.S(6);
             }
             if (c.Sent)
@@ -844,7 +844,7 @@ namespace OtzariaDict
             Graphics g = e.Graphics;
             g.Clear(Parent != null ? Parent.BackColor : Theme.Window);
             if (under == null) { Font f = Theme.F(14, false); under = new Font(f, FontStyle.Underline); }
-            Color c = !Enabled ? Theme.DisabledText : hover ? Theme.PrimaryDark : Theme.Primary;
+            Color c = !Enabled ? Theme.DisabledText : hover ? Theme.PrimaryDark : Theme.Link;
             TextRenderer.DrawText(g, Text, under, ClientRectangle, c, TextFormatFlags.RightToLeft | TextFormatFlags.NoPrefix | TextFormatFlags.SingleLine | TextFormatFlags.Left | TextFormatFlags.VerticalCenter);
             if (Focused && ShowFocusCues) Gfx.Frame(g, ClientRectangle, Theme.Primary, Dpi.Hair);
         }
@@ -1169,7 +1169,7 @@ namespace OtzariaDict
             int pad = Dpi.S(14), y = pad - Dpi.S(2), w = Width - 2 * pad;
             if (src != null)
             {
-                Gfx.TextAt(g, Head(), TitleFont, Theme.Primary, new Rectangle(pad, y, w, Dpi.S(22)), Align.Right, true, false);
+                Gfx.TextAt(g, Head(), TitleFont, Theme.Link, new Rectangle(pad, y, w, Dpi.S(22)), Align.Right, true, false);
                 y += Dpi.S(24);
             }
             for (int i = 0; i < lines.Count && i < heights.Count; i++)
@@ -1269,7 +1269,7 @@ namespace OtzariaDict
             addBox = new FlatTextBox(15);
             addBox.Cue = "מילה חדשה";
             btnAdd = new FlatBtn { Text = "הוסף", Style = BtnStyle.Filled };
-            addHint = new TextBlock { Font = Theme.F(13, false), Color = Theme.Primary };
+            addHint = new TextBlock { Font = Theme.F(13, false), Color = Theme.Link };
             chLabel = new TextBlock { Font = Theme.F(14, true), Color = Theme.Text, VCenter = true, Wrap = false };
             changes = new ChangeList(40);
             chNote = new TextBlock { Font = Theme.F(13, false), Color = Theme.TextQuiet,
@@ -1419,7 +1419,7 @@ namespace OtzariaDict
         {
             string raw = addBox.Value;
             string w = WordEdits.Clean(raw);
-            addHint.Color = Theme.Primary;
+            addHint.Color = Theme.Link;
             if (raw.Trim().Length == 0) addHint.Text = "";
             else if (w == null) { addHint.Color = Theme.Error; addHint.Text = "אפשר להוסיף מילה אחת בלבד, באותיות עבריות (מותר גם ' ו-\")."; }
             else if (edits.Contains(w)) addHint.Text = Q(w) + " כבר נמצאת במילון.";
@@ -1435,7 +1435,7 @@ namespace OtzariaDict
                 string w = WordEdits.Clean(raw);
                 addBox.Value = "";
                 RefreshAll(list.SelectedWord, -1);
-                addHint.Color = Theme.Primary;
+                addHint.Color = Theme.Link;
                 addHint.Text = Q(w) + " נוספה למילון.";
                 addBox.FocusBox();
             }
@@ -1569,11 +1569,11 @@ namespace OtzariaDict
                 else if (c.Kind == '-') edits.Remove(c.Word);
                 else edits.Fix(c.Word, c.NewWord);
             }
-            search.Value = "בסוגיי";
+            search.Value = "דאוריי";
             addBox.Value = "וכדמסתייעא";
-            RefreshAll("בסוגייין", -1);
+            RefreshAll("דאורייתה", -1);
             list.BeginEdit();
-            list.EditText = "בסוגיין";
+            list.EditText = "דאורייתא";
             UpdateButtons();
             Note("כתבו את האיות הנכון ולחצו \"אישור\" (או Enter). Esc – ביטול.", false);
         }
@@ -1591,7 +1591,7 @@ namespace OtzariaDict
             List<WordChange> l = new List<WordChange>();
             l.Add(new WordChange('+', "ודמסתייעא", null));
             l.Add(new WordChange('-', "בגמארא", null));
-            l.Add(new WordChange('~', "דאוריייתא", "דאורייתא"));
+            l.Add(new WordChange('~', "דאוריתא", "דאורייתא"));
             return l;
         }
     }

@@ -17,7 +17,7 @@ namespace OtzariaDict
     // ---------------------------------------------------------------- files, words, log
     public static class Core
     {
-        public const string AppVersion = "3.1.0.0";
+        public const string AppVersion = "3.1.0.1";
 
         // ONE dictionary file (from 3.0.0.2). With five files Word 365 used only the first ones,
         // while one file of 102,573 words (version 2.0) works. Everything goes into this file, most important words first.
@@ -306,7 +306,9 @@ namespace OtzariaDict
         // installation from the person's list, so in the file they are not "added by Word" - one taken back must go, not be kept.
         // 3.1: 11,034 words of 3.0's extended list that all the scanned libraries together do not have at least 3 times as written
         // (8,111 of them not even once): most are typos of online texts or two words run together; and 626 forms of the morning test
-        // build of 3.1 that the final lists do not have. The list is data/retired_list.txt.
+        // build of 3.1 that the final lists do not have. 3.1.0.1: 63 forms that are typos of the online libraries (הייינו) or words run
+        // together, and the forms of 27 common words that "chibur torani" no longer builds on (tools/stage1/drop_typos.py).
+        // The list is data/retired_list.txt.
         static string[] retired;
         public static string[] Retired
         {
@@ -2400,7 +2402,7 @@ namespace OtzariaDict
             string dir = Folder();
             Directory.CreateDirectory(dir);
             StringBuilder sb = new StringBuilder();
-            sb.Append("# המילון התורני 3.0 – השינויים שלכם במילון (+ הוספה, - הסרה, ~ תיקון). התוכנה כותבת את הקובץ הזה.\r\n");
+            sb.Append("# המילון התורני – השינויים שלכם במילון (+ הוספה, - הסרה, ~ תיקון). התוכנה כותבת את הקובץ הזה.\r\n");
             foreach (WordChange c in changes)
             {
                 sb.Append(c.Kind).Append(c.Word);
@@ -2597,25 +2599,38 @@ namespace OtzariaDict
             {
                 if (ch >= '\u0591' && ch <= '\u05C7' && ch != '\u05BE') continue;   // vowel points and cantillation marks (the maqaf stays)
                 if ((ch >= '\u200B' && ch <= '\u200F') || (ch >= '\u202A' && ch <= '\u202E') || (ch >= '\u2066' && ch <= '\u2069') || ch == '\uFEFF') continue;   // invisible marks (direction, joiners, BOM)
+                // 3.1.0.1 (the deep check): the Hebrew gershayim and geresh, and the curly quotes that Word puts into documents, become the
+                // plain marks that every word of the dictionary has - a word copied from a document is found, and added in the same form
+                if (ch == '\u05F4' || ch == '\u201C' || ch == '\u201D' || ch == '\u201E' || ch == '\u2033') { sb.Append('"'); continue; }
+                if (ch == '\u05F3' || ch == '\u2018' || ch == '\u2019' || ch == '\u2032') { sb.Append('\''); continue; }
                 sb.Append(ch);
             }
-            return sb.ToString();
+            // two apostrophes are the way many people type the gershayim (no word of the dictionary has two in a row)
+            return sb.ToString().Replace("''", "\"");
         }
 
-        // one word as the person typed it, cleaned (no spaces around it, no vowel points, no invisible marks);
-        // null = not one word: empty, a space inside, a sign that does not belong in a Hebrew word, no Hebrew letter at all, or longer than 60.
-        // (Every word of the editions is made of Hebrew letters, " and ' only, so each of them passes as it is.)
+        // one word as the person typed it, cleaned (no spaces around it, no vowel points, no invisible marks, the quote marks as the
+        // dictionary writes them); null = not one word: empty, a space inside, a sign that does not belong in a Hebrew word, no Hebrew
+        // letter at all, or longer than 60. (Every word of the editions is made of Hebrew letters, " and ' only, so each of them passes as it is.)
         public static string Clean(string raw)
         {
             if (raw == null) return null;
             string w = Strip(raw).Trim();
+            // quote marks around the word are not part of it (a word copied with them: the window itself shows a word between quote
+            // marks); a geresh at the end of an abbreviation (וכו') stays. No word starts with a quote mark or ends with gershayim.
+            if (w.Length > 1 && (w[0] == '"' || w[0] == '\''))
+            {
+                char q = w[0];
+                w = w.Substring(1);
+                if (w.Length > 1 && w[w.Length - 1] == q) w = w.Substring(0, w.Length - 1);
+            }
+            w = w.TrimStart('"', '\'').TrimEnd('"');
             if (w.Length == 0 || w.Length > 60) return null;
             bool letter = false;
             foreach (char ch in w)
             {
                 if (ch >= '\u05D0' && ch <= '\u05EA') { letter = true; continue; }   // Hebrew letters (with the final forms)
-                bool ok = ch == '\u05F3' || ch == '\u05F4' || ch == '\u05BE'           // geresh, gershayim, maqaf
-                       || ch == '"' || ch == '\'' || ch == '-';
+                bool ok = ch == '\u05BE' || ch == '"' || ch == '\'' || ch == '-';   // (the maqaf; the Hebrew geresh and gershayim are ' and " by now)
                 if (!ok) return null;
             }
             return letter ? w : null;

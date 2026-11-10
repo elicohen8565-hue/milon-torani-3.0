@@ -13,9 +13,9 @@ using System.Windows.Forms;
 [assembly: AssemblyTitle("המילון התורני 3.1")]
 [assembly: AssemblyProduct("המילון התורני 3.1")]
 [assembly: AssemblyDescription("מתקין מילון תורני (תנ״ך, משנה, בבלי, ירושלמי ועוד) ל-Microsoft Word")]
-[assembly: AssemblyVersion("3.1.0.0")]
-[assembly: AssemblyFileVersion("3.1.0.0")]
-[assembly: AssemblyInformationalVersion("3.1.0.0")]
+[assembly: AssemblyVersion("3.1.0.1")]
+[assembly: AssemblyFileVersion("3.1.0.1")]
+[assembly: AssemblyInformationalVersion("3.1.0.1")]
 
 namespace OtzariaDict
 {
@@ -69,8 +69,8 @@ namespace OtzariaDict
         public static readonly Color Primary = C("#2F6EEC");        // the accent (white text on it: 4.6:1)
         public static readonly Color PrimaryHover = C("#2862D9");
         public static readonly Color PrimaryDark = C("#2154C2");    // a pressed blue button
-        public static readonly Color OnPrimary = C("#FFFFFF");
-        public static readonly Color OnPrimarySoft = C("#E2EBFE");  // small text on the blue (second line of the install button)
+        public static readonly Color OnPrimary = C("#FFFFFF");      // (also the small second line of the install button: on the blue only white passes 4.5:1)
+        public static readonly Color Link = C("#2861DA");           // small blue text: the sources of a word, links, hints (4.9:1 on the grey, on the chosen row)
         public static readonly Color Soft = C("#EEF4FF");           // light blue: the chosen card, the chosen row of a list
         public static readonly Color SoftHover = C("#E2EBFD");      // a quiet blue button under the mouse
         public static readonly Color SoftPill = C("#DCE7FF");       // the word count of the chosen card; the circle of a blue mark
@@ -85,15 +85,15 @@ namespace OtzariaDict
         public static readonly Color SecondaryHover = C("#DADEE4");
         public static readonly Color SecondaryPress = C("#CFD4DB");
         public static readonly Color Line = C("#CDD3DB");           // the thin edge of the floating window of the sources
-        public static readonly Color Mark = C("#B4BAC3");           // the ring of an empty round mark
-        public static readonly Color MarkHover = C("#949CA8");
-        public static readonly Color SwitchOff = C("#C9CED6");
-        public static readonly Color SwitchOffHover = C("#BAC0CA");
+        public static readonly Color Mark = C("#8C949F");           // the ring of an empty round mark (3:1 on white: it is seen)
+        public static readonly Color MarkHover = C("#6E7684");
+        public static readonly Color SwitchOff = C("#8C949F");        // a switch that is off (3:1 on the white card, like the round mark)
+        public static readonly Color SwitchOffHover = C("#6E7684");
         public static readonly Color Track = C("#E4E7EC");          // the empty part of the progress line
         public static readonly Color Pill = C("#F2F3F5");           // a quiet label (the word count of a card)
         public static readonly Color OnPill = C("#4A5160");
-        public static readonly Color Thumb = C("#C9CED6");          // the scroll bar of a list
-        public static readonly Color ThumbHover = C("#A7AEB9");
+        public static readonly Color Thumb = C("#8C949F");          // the scroll bar of a list (3:1 on white: with 600,000 words it is the way through the list)
+        public static readonly Color ThumbHover = C("#6E7684");
         public static readonly Color DisabledBack = C("#E9EBEE");
         public static readonly Color DisabledText = C("#A0A6AF");
         public static readonly Color Text = C("#1D2433");
@@ -517,7 +517,7 @@ namespace OtzariaDict
             }
             else if (Style == BtnStyle.Tonal)
             {
-                fg = Theme.Primary;
+                fg = Theme.OnSoftPill;   // (the accent itself is too light for text on the light blue)
                 face = down ? Theme.SoftPill : Gfx.Mix(Theme.Soft, Theme.SoftHover, hv);
             }
             else if (Style == BtnStyle.Secondary)
@@ -527,7 +527,7 @@ namespace OtzariaDict
             }
             else
             {
-                fg = Theme.Primary;
+                fg = Theme.OnSoftPill;
                 face = down ? Theme.SoftHover : Gfx.Mix(page, Theme.Soft, hv);
             }
             if (Style != BtnStyle.Text || hv > 0.01f || down) Gfx.Fill(g, r, rad, face);
@@ -543,7 +543,7 @@ namespace OtzariaDict
                 Gfx.TextAt(g, Text, f, fg, new Rectangle(side, 0, Width - 2 * side, r.Height), Align.Center, true, false);
             else
             {
-                Color sub = Enabled ? (Style == BtnStyle.Filled ? Theme.OnPrimarySoft : Theme.TextSoft) : fg;
+                Color sub = Enabled ? (Style == BtnStyle.Filled ? Theme.OnPrimary : Theme.TextSoft) : fg;
                 int top = (r.Height - Dpi.S(38)) / 2;
                 Gfx.TextAt(g, Text, Theme.F(15.5f, true), fg, new Rectangle(side, top, Width - 2 * side, Dpi.S(21)), Align.Center, true, false);
                 Gfx.TextAt(g, subText, Theme.F(12, false), sub, new Rectangle(side, top + Dpi.S(21), Width - 2 * side, Dpi.S(17)), Align.Center, true, false);
@@ -1261,6 +1261,29 @@ namespace OtzariaDict
             UpdateSummary();
         }
 
+        // for the developer's screenshots of the other states (--preview-state busy | fail | update): nothing is done for real
+        public void PreviewState(string which)
+        {
+            Preview();
+            if (which == "busy")
+            {
+                SetBusy(true); UseWaitCursor = false;
+                status.Title = ""; status.Text = "";
+                prog.Visible = true; prog.Value = 45; SetStage("מעדכן את קובץ המילון…");
+            }
+            else if (which == "fail")
+            {
+                status.Ok = false; status.Title = "צריך להשלים ידנית";
+                status.Text = "קובץ המילון נשמר, אבל לא הצלחתי לרשום אותו בוורד אוטומטית.";
+            }
+            else if (which == "update")
+            {
+                chip.Text = "מותקן: מורחב · יש עדכון"; chip.Kind = LabelKind.Warn; chip.Invalidate();
+                cardComp.Selected = false; UpdateSummary();
+                status.Title = ""; status.Text = "";
+            }
+        }
+
         bool closeWhenDone;                         // the window was closed during an action: it is hidden, and closes when the action ends
         System.Windows.Forms.Timer closeTimer;
 
@@ -1522,6 +1545,7 @@ namespace OtzariaDict
             try { wf = new WordsForm(ext, comp, installed, false); }
             catch (Exception ex)
             {
+                UseWaitCursor = false;   // (before the message, not after it)
                 Core.Log("Opening the word editing failed: " + ex);
                 Say(new Result { Ok = false, Title = "עריכת מילים", Text = "לא הצלחתי לפתוח את עריכת המילים:\r\n" + Core.Msg(ex) + "\r\n\r\nקובץ יומן לשליחה: " + Core.LogPath });
                 return;
@@ -1696,6 +1720,7 @@ namespace OtzariaDict
                 {
                     MainForm mf = new MainForm();
                     if (args.Length >= 1 && args[0] == "--preview") mf.Preview();
+                    if (args.Length >= 2 && args[0] == "--preview-state") mf.PreviewState(args[1]);
                     // for the developer: the window at another size ("--size 1300x900"), to see the layout of a bigger window
                     int si = Array.IndexOf(args, "--size");
                     if (si >= 0 && si + 1 < args.Length)
@@ -2126,7 +2151,17 @@ namespace OtzariaDict
 
             Console.WriteLine("-- 3.0.0.9: what the person types is cleaned first");
             Check(WordEdits.Clean("  מיבעיא ") == "מיבעיא", "spaces around a word are dropped");
-            Check(WordEdits.Clean("חז\"ל") == "חז\"ל" && WordEdits.Clean("ר׳") == "ר׳" && WordEdits.Clean("רמב״ם") == "רמב״ם", "gershayim and geresh stay");
+            Check(WordEdits.Clean("חז\"ל") == "חז\"ל" && WordEdits.Clean("ר'") == "ר'", "gershayim and geresh stay");
+            // 3.1.0.1 (the deep check): the Hebrew marks and the curly quotes of Word's documents become the marks of the dictionary
+            Check(WordEdits.Clean("רמב״ם") == "רמב\"ם" && WordEdits.Clean("רמב”ם") == "רמב\"ם" && WordEdits.Clean("רמב“ם") == "רמב\"ם",
+                  "Hebrew gershayim and curly quotes become \" (as every word of the dictionary has it)");
+            Check(WordEdits.Clean("וכו׳") == "וכו'" && WordEdits.Clean("וכו’") == "וכו'" && WordEdits.Clean("וכו‘") == "וכו'", "Hebrew geresh and curly apostrophes become '");
+            // 3.1.0.1 (the second deep check): quote marks around a word (copied with them, as the window itself shows a word) are not part
+            // of it, and two apostrophes - the way many people type the gershayim - are the gershayim
+            Check(WordEdits.Clean("\"מיבעי\"") == "מיבעי" && WordEdits.Clean("'מיבעי'") == "מיבעי" && WordEdits.Clean("”מיבעי“") == "מיבעי",
+                  "quote marks around a word are dropped");
+            Check(WordEdits.Clean("רש''י") == "רש\"י" && WordEdits.Clean("וכו'") == "וכו'" && WordEdits.Clean("\"") == null && WordEdits.Clean("'") == null,
+                  "two apostrophes are the gershayim; a geresh at the end stays; a quote mark alone is not a word");
             Check(WordEdits.Clean("בְּרֵאשִׁית") == "בראשית", "vowel points are dropped");
             Check(WordEdits.Clean("\u200Fשלום\u200E") == "שלום", "invisible direction marks are dropped");
             Check(WordEdits.Clean("שתי מילים") == null && WordEdits.Clean("") == null && WordEdits.Clean("א<ב") == null && WordEdits.Clean(new string('א', 80)) == null,
@@ -2154,6 +2189,17 @@ namespace OtzariaDict
             Check(inOrder, "the list of all the words is sorted, without repeats");
             e.Add("תיבהחדשה");
             Check(e.Sorted().Contains("תיבהחדשה") && e.Find("יבהחדש").Count >= 1, "the list and the search follow the changes");
+            Check(e.Find("רש״י").Contains("רש\"י") && e.Find("רש”י").Contains("רש\"י"), "a search with Hebrew gershayim or a curly quote finds the word (3.1.0.1)");
+            Check(e.Find("רש''י").Contains("רש\"י"), "a search with two apostrophes finds the word (3.1.0.1)");
+            // 3.1.0.1: forms that are typos of the online libraries, words run together, and common words that do not belong here
+            List<string> everything = Core.BuildWords(true, true);
+            HashSet<string> everySet = new HashSet<string>(everything, StringComparer.Ordinal), retiredSet = new HashSet<string>(Core.Retired, StringComparer.Ordinal);
+            bool typosOut = true;
+            foreach (string t in new string[] { "הייינו", "חיייב", "עדייין", "כתוכ", "חחח", "עובדכוכבים", "הכתובשנאמר", "דוואו", "וכדיאללה", "דהיטלר" })
+                if (everySet.Contains(t) || !retiredSet.Contains(t)) { typosOut = false; Console.WriteLine("     still in: " + t); }
+            Check(typosOut, "typos, run-together words and unfit common words are out of every edition, and retired");
+            Check(everySet.Contains("לייי") && everySet.Contains("ובבבא") && everySet.Contains("התתתונים") && everySet.Contains("דמגעיל") && everySet.Contains("דזונה"),
+                  "the forms that only look like typos, and Torah words, stay");
 
             Console.WriteLine("-- 3.0.0.9: the changes are kept in a file, and every installation applies them");
             List<WordChange> mine = new List<WordChange>();
@@ -2164,6 +2210,8 @@ namespace OtzariaDict
             MyWords.Save(mine);
             List<WordChange> back = MyWords.Load();
             Check(back.Count == 3 && back[0].Sent && !back[1].Sent && back[2].Kind == '~' && back[2].Word == "מיבעי" && back[2].NewWord == "מיבעיי", "saved and read back, also what was already sent");
+            string head = File.ReadAllLines(Path.Combine(MyWords.Folder(), MyWords.FileName))[0];
+            Check(head.StartsWith("#") && head.IndexOf("3.0", StringComparison.Ordinal) < 0, "the first line of the file names no old version (3.1.0.1)");
             Installer.Install(false, false, quiet, false);
             List<string> inFile = Core.ReadDicWords(main);
             Check(inFile.Contains("תיבהחדשה") && inFile.Contains("מיבעיי") && !inFile.Contains("מתרצינן") && !inFile.Contains("מיבעי"), "the installed file has the person's changes");
