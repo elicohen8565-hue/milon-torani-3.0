@@ -1801,6 +1801,65 @@ namespace OtzariaDict
             return n == 1 ? "מילה אחת שהוספתם בעצמכם לוורד הועברה" : n.ToString("N0") + " מילים שהוספתם בעצמכם לוורד הועברו";
         }
 
+        // "remove from Word" of the window (3.1.0.2, the user: "the removal should also remove what earlier versions put in"): Remove, and
+        // then what earlier versions left behind: the words of the Torah dictionary in CUSTOM.DIC (version 2.0 wrote its words there; also
+        // the words that have left the dictionary since) and the old entries in Word's list of dictionaries (old file names, the size
+        // check). Office's RoamingCustom.dic - the words the person added in Word - is not touched here (the advanced removal offers it).
+        // As in the advanced removal: only while no Office program runs, and a copy of everything that changes is saved first.
+        public static Result RemoveFull(bool useWord, ProgressFn progress)
+        {
+            if (progress == null) progress = delegate (int p, string what) { };
+            Result res = Remove(useWord);
+            if (!res.Ok) return res;
+            HashSet<string> kept = new HashSet<string>(StringComparer.Ordinal);
+            if (res.KeptWords != null) foreach (string w in res.KeptWords) kept.Add(w);
+            progress(70, "מנקה מה שנשאר מגרסאות קודמות…");
+            bool wordClosed = WordCom.WaitUntilNoWord(WordCom.CloseWaitMs);
+            List<string> office = wordClosed ? WordCom.OtherOfficeRunning() : new List<string>();
+            if (!wordClosed || office.Count > 0)
+            {
+                string who = !wordClosed ? "וורד עדיין פתוח" : string.Join(", ", office.ToArray()) + (office.Count == 1 ? " פתוח" : " פתוחים");
+                res.Text += "\r\n\r\n" + who + ", ולכן לא ניקיתי את מה שגרסאות קודמות השאירו (מילים ב-CUSTOM.DIC ורשומות ישנות ברשימת המילונים של וורד). "
+                          + "כדי לנקות גם אותם: סגרו " + (!wordClosed ? "את וורד" : (office.Count == 1 ? "אותו" : "אותם")) + " ולחצו שוב על \"הסר מוורד\".";
+                return res;
+            }
+            string backup = Path.Combine(Core.UProofDir(), "Backup_" + DateTime.Now.ToString("yyyyMMdd_HHmmss", CultureInfo.InvariantCulture));
+            StringBuilder note = new StringBuilder();
+            string problem;
+            List<string> lines = RepairWordList(backup, true, out problem);
+            int entries = lines == null ? 0 : lines.FindAll(delegate (string l) { return l.StartsWith("deleted", StringComparison.Ordinal); }).Count;
+            if (entries > 0)
+                note.Append("word-dictionary-list.reg, word-dictionary-list.txt – רשימת המילונים של וורד כפי שהייתה לפני הניקוי. כדי להחזיר אותה: סגרו את וורד ולחצו פעמיים על word-dictionary-list.reg.\r\n");
+            List<string> failed;
+            List<KeyValuePair<string, string>> copies;
+            int words = CleanPersonal(backup, kept, false, out failed, out copies);
+            foreach (KeyValuePair<string, string> c in copies)
+                note.Append(Path.GetFileName(c.Key) + " – העותק של " + c.Value + " לפני שהמילים של המילון התורני יצאו ממנו. כדי להחזיר: סגרו את וורד והעתיקו אותו בחזרה למקומו.\r\n");
+            if (words > 0 || entries > 0)
+            {
+                if (res.Text.StartsWith("לא נמצא מילון תורני מותקן", StringComparison.Ordinal)) res.Text = "המילון התורני עצמו לא היה מותקן.";
+                res.Text += "\r\n\r\nנוקה גם מה שנשאר מגרסאות קודמות:"
+                          + (words > 0 ? "\r\n• מ-CUSTOM.DIC " + (words == 1 ? "יצאה מילה אחת" : "יצאו " + words.ToString("N0") + " מילים") + " של המילון התורני. שאר המילים שלכם נשארו." : "")
+                          + (entries > 0 ? "\r\n• מרשימת המילונים של וורד " + (entries == 1 ? "יצאה רשומה ישנה אחת." : "יצאו " + entries + " רשומות ישנות.") : "");
+            }
+            if (lines == null) res.Text += "\r\n\r\n(את הרשומות הישנות ברשימת המילונים של וורד לא ניקיתי: " + problem + ")";
+            if (failed.Count > 0) res.Text += "\r\n\r\n(לא הצלחתי לנקות את " + string.Join(", ", failed.ToArray()) + "; הוא נשאר כמו שהיה.)";
+            bool backedUp = false;
+            try { backedUp = Directory.Exists(backup) && Directory.GetFileSystemEntries(backup).Length > 0; } catch (Exception) { }
+            if (backedUp)
+            {
+                try
+                {
+                    File.WriteAllText(Path.Combine(backup, "README.txt"), "גיבוי של ההסרה – " + DateTime.Now.ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture)
+                                      + ", המילון התורני " + Core.AppVersion + "\r\n\r\n" + note.ToString(), new UTF8Encoding(true));
+                }
+                catch (Exception ex) { Core.Log("Could not write the backup note: " + Core.Msg(ex)); }
+                res.Text += "\r\n\r\nעותק גיבוי של מה ששונה נשמר בתיקייה:\r\n" + backup;
+            }
+            else try { if (Directory.Exists(backup)) Directory.Delete(backup); } catch (Exception) { }
+            return res;
+        }
+
         // advanced removal: EVERY custom dictionary leaves Word (only Word's own built-in dictionary stays),
         // including dictionaries and words this program did not add. A backup copy is saved first.
         public static Result RemoveAdvanced(bool useWord) { return RemoveEverything(useWord, null); }
@@ -2123,14 +2182,18 @@ namespace OtzariaDict
         // A copy of each file that changes goes to the backup folder first (copies: copy -> the file it was), and a file is written whole
         // or not at all. Returns how many words left them; failed = the files that could not be changed (they are as they were).
         internal static int CleanPersonal(string backup, HashSet<string> keep, out List<string> failed, out List<KeyValuePair<string, string>> copies)
+        { return CleanPersonal(backup, keep, true, out failed, out copies); }
+
+        // roaming = false: CUSTOM.DIC only (the plain removal: what earlier versions of this program wrote)
+        internal static int CleanPersonal(string backup, HashSet<string> keep, bool roaming, out List<string> failed, out List<KeyValuePair<string, string>> copies)
         {
             failed = new List<string>();
             copies = new List<KeyValuePair<string, string>>();
             HashSet<string> ours = new HashSet<string>(Core.BuildWords(true, true), StringComparer.Ordinal);
             HashSet<string> oursAndOld = new HashSet<string>(ours, StringComparer.Ordinal);
             foreach (string w in Core.Retired) oursAndOld.Add(w);
-            List<string> files = new List<string>(DictList.RoamingFiles());
-            foreach (string f in PersonalFilesHook != null ? PersonalFilesHook() : new string[0]) if (!files.Contains(f)) files.Add(f);
+            List<string> files = roaming ? new List<string>(DictList.RoamingFiles()) : new List<string>();
+            if (roaming) foreach (string f in PersonalFilesHook != null ? PersonalFilesHook() : new string[0]) if (!files.Contains(f)) files.Add(f);
             try
             {
                 foreach (string f in Directory.GetFiles(Core.UProofDir()))

@@ -1527,7 +1527,7 @@ namespace OtzariaDict
         {
             if (busy || asking) return;
             if (!WordIsClosedOrIgnored(false)) return;
-            Work(delegate { return Installer.Remove(true); });
+            Work(delegate { return Installer.RemoveFull(true, null); });
         }
 
         // the word-editing window (Words.cs). It shows the dictionary that is installed (or, if none is, the one chosen above);
@@ -2749,6 +2749,33 @@ namespace OtzariaDict
             System.Threading.Thread.Sleep(1100);
             Result r1 = Installer.RemoveAdvanced(false, op);
             Check(r1.Ok && r1.Text.Contains("מילה אחת"), "one word out: \"מילה אחת\", not \"1 מילים\"");
+
+            // 3.1.0.2 (the user: "the removal should also remove what earlier versions put in"): the plain "remove from Word" also takes
+            // the words of the Torah dictionary (and the words that left it) out of CUSTOM.DIC - version 2.0 wrote its words there - and the
+            // old entries out of Word's list. The dictionary of "Add to Dictionary" (RoamingCustom.dic) is the person's own: untouched.
+            System.Threading.Thread.Sleep(1100);
+            InstallWithFakeWord(new FakeApp(), false, new FakeApp());
+            string customOld = Path.Combine(Core.UProofDir(), "CUSTOM.DIC");
+            Core.WriteDic(customOld, new List<string> { "רש\"י", Core.Retired[0], "מילהפרטיתשלי" });
+            Core.WriteDic(roam, new List<string> { "רש\"י", "מילהשהוספתיבוורד" });
+            using (Microsoft.Win32.RegistryKey k = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(RegFallback.KeyPath))
+                k.SetValue("7_" + acct, "Milon_SizeTest_400000.dic");
+            Result rf = Installer.RemoveFull(false, null);
+            List<string> customLeft = Core.ReadDicWords(customOld);
+            bool staleGone;
+            using (Microsoft.Win32.RegistryKey k = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(RegFallback.KeyPath))
+                staleGone = k.GetValue("7_" + acct) == null;
+            Check(rf.Ok && rf.Title == "ההסרה הושלמה" && !File.Exists(main) && customLeft.Count == 1 && customLeft[0] == "מילהפרטיתשלי" && staleGone
+                  && Core.ReadDicWords(roam).Count == 2 && rf.Text.Contains("גרסאות קודמות") && rf.Text.Contains("Backup_"),
+                  "the plain removal also clears what earlier versions left (CUSTOM.DIC, old list entries); the person's own dictionary stays");
+            System.Threading.Thread.Sleep(1100);
+            Core.WriteDic(customOld, new List<string> { "רש\"י", "מילהפרטיתשלי" });
+            WordCom.OtherOfficeHook = delegate { return new List<string> { "Outlook" }; };
+            Result rfo;
+            try { rfo = Installer.RemoveFull(false, null); } finally { WordCom.OtherOfficeHook = null; }
+            Check(rfo.Ok && Core.ReadDicWords(customOld).Count == 2 && rfo.Text.Contains("Outlook"),
+                  "the plain removal while Outlook is open: CUSTOM.DIC is left as it is, and the answer says so");
+            File.Delete(customOld);
 
             // M3: "remove the dictionary" stopped (the person's words in our file could not be kept elsewhere): our entry stays in Word's list
             InstallWithFakeWord(new FakeApp(), false, new FakeApp());
