@@ -17,7 +17,7 @@ namespace OtzariaDict
     // ---------------------------------------------------------------- files, words, log
     public static class Core
     {
-        public const string AppVersion = "3.1.0.0";
+        public const string AppVersion = "3.1.0.1";
 
         // ONE dictionary file (from 3.0.0.2). With five files Word 365 used only the first ones,
         // while one file of 102,573 words (version 2.0) works. Everything goes into this file, most important words first.
@@ -306,7 +306,9 @@ namespace OtzariaDict
         // installation from the person's list, so in the file they are not "added by Word" - one taken back must go, not be kept.
         // 3.1: 11,034 words of 3.0's extended list that all the scanned libraries together do not have at least 3 times as written
         // (8,111 of them not even once): most are typos of online texts or two words run together; and 626 forms of the morning test
-        // build of 3.1 that the final lists do not have. The list is data/retired_list.txt.
+        // build of 3.1 that the final lists do not have. 3.1.0.1: 63 forms that are typos of the online libraries (הייינו) or words run
+        // together, and the forms of 27 common words that "chibur torani" no longer builds on (tools/stage1/drop_typos.py).
+        // The list is data/retired_list.txt.
         static string[] retired;
         public static string[] Retired
         {
@@ -1799,6 +1801,65 @@ namespace OtzariaDict
             return n == 1 ? "מילה אחת שהוספתם בעצמכם לוורד הועברה" : n.ToString("N0") + " מילים שהוספתם בעצמכם לוורד הועברו";
         }
 
+        // "remove from Word" of the window (3.1.0.1, the user: "the removal should also remove what earlier versions put in"): Remove, and
+        // then what earlier versions left behind: the words of the Torah dictionary in CUSTOM.DIC (version 2.0 wrote its words there; also
+        // the words that have left the dictionary since) and the old entries in Word's list of dictionaries (old file names, the size
+        // check). Office's RoamingCustom.dic - the words the person added in Word - is not touched here (the advanced removal offers it).
+        // As in the advanced removal: only while no Office program runs, and a copy of everything that changes is saved first.
+        public static Result RemoveFull(bool useWord, ProgressFn progress)
+        {
+            if (progress == null) progress = delegate (int p, string what) { };
+            Result res = Remove(useWord);
+            if (!res.Ok) return res;
+            HashSet<string> kept = new HashSet<string>(StringComparer.Ordinal);
+            if (res.KeptWords != null) foreach (string w in res.KeptWords) kept.Add(w);
+            progress(70, "מנקה מה שנשאר מגרסאות קודמות…");
+            bool wordClosed = WordCom.WaitUntilNoWord(WordCom.CloseWaitMs);
+            List<string> office = wordClosed ? WordCom.OtherOfficeRunning() : new List<string>();
+            if (!wordClosed || office.Count > 0)
+            {
+                string who = !wordClosed ? "וורד עדיין פתוח" : string.Join(", ", office.ToArray()) + (office.Count == 1 ? " פתוח" : " פתוחים");
+                res.Text += "\r\n\r\n" + who + ", ולכן לא ניקיתי את מה שגרסאות קודמות השאירו (מילים ב-CUSTOM.DIC ורשומות ישנות ברשימת המילונים של וורד). "
+                          + "כדי לנקות גם אותם: סגרו " + (!wordClosed ? "את וורד" : (office.Count == 1 ? "אותו" : "אותם")) + " ולחצו שוב על \"הסר מוורד\".";
+                return res;
+            }
+            string backup = Path.Combine(Core.UProofDir(), "Backup_" + DateTime.Now.ToString("yyyyMMdd_HHmmss", CultureInfo.InvariantCulture));
+            StringBuilder note = new StringBuilder();
+            string problem;
+            List<string> lines = RepairWordList(backup, true, out problem);
+            int entries = lines == null ? 0 : lines.FindAll(delegate (string l) { return l.StartsWith("deleted", StringComparison.Ordinal); }).Count;
+            if (entries > 0)
+                note.Append("word-dictionary-list.reg, word-dictionary-list.txt – רשימת המילונים של וורד כפי שהייתה לפני הניקוי. כדי להחזיר אותה: סגרו את וורד ולחצו פעמיים על word-dictionary-list.reg.\r\n");
+            List<string> failed;
+            List<KeyValuePair<string, string>> copies;
+            int words = CleanPersonal(backup, kept, false, out failed, out copies);
+            foreach (KeyValuePair<string, string> c in copies)
+                note.Append(Path.GetFileName(c.Key) + " – העותק של " + c.Value + " לפני שהמילים של המילון התורני יצאו ממנו. כדי להחזיר: סגרו את וורד והעתיקו אותו בחזרה למקומו.\r\n");
+            if (words > 0 || entries > 0)
+            {
+                if (res.Text.StartsWith("לא נמצא מילון תורני מותקן", StringComparison.Ordinal)) res.Text = "המילון התורני עצמו לא היה מותקן.";
+                res.Text += "\r\n\r\nנוקה גם מה שנשאר מגרסאות קודמות:"
+                          + (words > 0 ? "\r\n• מ-CUSTOM.DIC " + (words == 1 ? "יצאה מילה אחת" : "יצאו " + words.ToString("N0") + " מילים") + " של המילון התורני. שאר המילים שלכם נשארו." : "")
+                          + (entries > 0 ? "\r\n• מרשימת המילונים של וורד " + (entries == 1 ? "יצאה רשומה ישנה אחת." : "יצאו " + entries + " רשומות ישנות.") : "");
+            }
+            if (lines == null) res.Text += "\r\n\r\n(את הרשומות הישנות ברשימת המילונים של וורד לא ניקיתי: " + problem + ")";
+            if (failed.Count > 0) res.Text += "\r\n\r\n(לא הצלחתי לנקות את " + string.Join(", ", failed.ToArray()) + "; הוא נשאר כמו שהיה.)";
+            bool backedUp = false;
+            try { backedUp = Directory.Exists(backup) && Directory.GetFileSystemEntries(backup).Length > 0; } catch (Exception) { }
+            if (backedUp)
+            {
+                try
+                {
+                    File.WriteAllText(Path.Combine(backup, "README.txt"), "גיבוי של ההסרה – " + DateTime.Now.ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture)
+                                      + ", המילון התורני " + Core.AppVersion + "\r\n\r\n" + note.ToString(), new UTF8Encoding(true));
+                }
+                catch (Exception ex) { Core.Log("Could not write the backup note: " + Core.Msg(ex)); }
+                res.Text += "\r\n\r\nעותק גיבוי של מה ששונה נשמר בתיקייה:\r\n" + backup;
+            }
+            else try { if (Directory.Exists(backup)) Directory.Delete(backup); } catch (Exception) { }
+            return res;
+        }
+
         // advanced removal: EVERY custom dictionary leaves Word (only Word's own built-in dictionary stays),
         // including dictionaries and words this program did not add. A backup copy is saved first.
         public static Result RemoveAdvanced(bool useWord) { return RemoveEverything(useWord, null); }
@@ -2121,14 +2182,18 @@ namespace OtzariaDict
         // A copy of each file that changes goes to the backup folder first (copies: copy -> the file it was), and a file is written whole
         // or not at all. Returns how many words left them; failed = the files that could not be changed (they are as they were).
         internal static int CleanPersonal(string backup, HashSet<string> keep, out List<string> failed, out List<KeyValuePair<string, string>> copies)
+        { return CleanPersonal(backup, keep, true, out failed, out copies); }
+
+        // roaming = false: CUSTOM.DIC only (the plain removal: what earlier versions of this program wrote)
+        internal static int CleanPersonal(string backup, HashSet<string> keep, bool roaming, out List<string> failed, out List<KeyValuePair<string, string>> copies)
         {
             failed = new List<string>();
             copies = new List<KeyValuePair<string, string>>();
             HashSet<string> ours = new HashSet<string>(Core.BuildWords(true, true), StringComparer.Ordinal);
             HashSet<string> oursAndOld = new HashSet<string>(ours, StringComparer.Ordinal);
             foreach (string w in Core.Retired) oursAndOld.Add(w);
-            List<string> files = new List<string>(DictList.RoamingFiles());
-            foreach (string f in PersonalFilesHook != null ? PersonalFilesHook() : new string[0]) if (!files.Contains(f)) files.Add(f);
+            List<string> files = roaming ? new List<string>(DictList.RoamingFiles()) : new List<string>();
+            if (roaming) foreach (string f in PersonalFilesHook != null ? PersonalFilesHook() : new string[0]) if (!files.Contains(f)) files.Add(f);
             try
             {
                 foreach (string f in Directory.GetFiles(Core.UProofDir()))
@@ -2400,7 +2465,7 @@ namespace OtzariaDict
             string dir = Folder();
             Directory.CreateDirectory(dir);
             StringBuilder sb = new StringBuilder();
-            sb.Append("# המילון התורני 3.0 – השינויים שלכם במילון (+ הוספה, - הסרה, ~ תיקון). התוכנה כותבת את הקובץ הזה.\r\n");
+            sb.Append("# המילון התורני – השינויים שלכם במילון (+ הוספה, - הסרה, ~ תיקון). התוכנה כותבת את הקובץ הזה.\r\n");
             foreach (WordChange c in changes)
             {
                 sb.Append(c.Kind).Append(c.Word);
@@ -2597,25 +2662,38 @@ namespace OtzariaDict
             {
                 if (ch >= '\u0591' && ch <= '\u05C7' && ch != '\u05BE') continue;   // vowel points and cantillation marks (the maqaf stays)
                 if ((ch >= '\u200B' && ch <= '\u200F') || (ch >= '\u202A' && ch <= '\u202E') || (ch >= '\u2066' && ch <= '\u2069') || ch == '\uFEFF') continue;   // invisible marks (direction, joiners, BOM)
+                // 3.1.0.1 (the deep check): the Hebrew gershayim and geresh, and the curly quotes that Word puts into documents, become the
+                // plain marks that every word of the dictionary has - a word copied from a document is found, and added in the same form
+                if (ch == '\u05F4' || ch == '\u201C' || ch == '\u201D' || ch == '\u201E' || ch == '\u2033') { sb.Append('"'); continue; }
+                if (ch == '\u05F3' || ch == '\u2018' || ch == '\u2019' || ch == '\u2032') { sb.Append('\''); continue; }
                 sb.Append(ch);
             }
-            return sb.ToString();
+            // two apostrophes are the way many people type the gershayim (no word of the dictionary has two in a row)
+            return sb.ToString().Replace("''", "\"");
         }
 
-        // one word as the person typed it, cleaned (no spaces around it, no vowel points, no invisible marks);
-        // null = not one word: empty, a space inside, a sign that does not belong in a Hebrew word, no Hebrew letter at all, or longer than 60.
-        // (Every word of the editions is made of Hebrew letters, " and ' only, so each of them passes as it is.)
+        // one word as the person typed it, cleaned (no spaces around it, no vowel points, no invisible marks, the quote marks as the
+        // dictionary writes them); null = not one word: empty, a space inside, a sign that does not belong in a Hebrew word, no Hebrew
+        // letter at all, or longer than 60. (Every word of the editions is made of Hebrew letters, " and ' only, so each of them passes as it is.)
         public static string Clean(string raw)
         {
             if (raw == null) return null;
             string w = Strip(raw).Trim();
+            // quote marks around the word are not part of it (a word copied with them: the window itself shows a word between quote
+            // marks); a geresh at the end of an abbreviation (וכו') stays. No word starts with a quote mark or ends with gershayim.
+            if (w.Length > 1 && (w[0] == '"' || w[0] == '\''))
+            {
+                char q = w[0];
+                w = w.Substring(1);
+                if (w.Length > 1 && w[w.Length - 1] == q) w = w.Substring(0, w.Length - 1);
+            }
+            w = w.TrimStart('"', '\'').TrimEnd('"');
             if (w.Length == 0 || w.Length > 60) return null;
             bool letter = false;
             foreach (char ch in w)
             {
                 if (ch >= '\u05D0' && ch <= '\u05EA') { letter = true; continue; }   // Hebrew letters (with the final forms)
-                bool ok = ch == '\u05F3' || ch == '\u05F4' || ch == '\u05BE'           // geresh, gershayim, maqaf
-                       || ch == '"' || ch == '\'' || ch == '-';
+                bool ok = ch == '\u05BE' || ch == '"' || ch == '\'' || ch == '-';   // (the maqaf; the Hebrew geresh and gershayim are ' and " by now)
                 if (!ok) return null;
             }
             return letter ? w : null;
